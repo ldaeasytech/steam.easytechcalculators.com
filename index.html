@@ -1,2 +1,169 @@
 <link rel="canonical" href="https://steam.easytechcalculators.com">
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Water Phase Diagram | EasyTech Calculators</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body{
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  margin:0;
+  background:#f4f6f8;
+}
+header{
+  background:#0b5ed7;
+  color:white;
+  padding:1.2rem;
+  text-align:center;
+}
+main{
+  max-width:1000px;
+  margin:auto;
+  padding:1rem;
+}
+.card{
+  background:white;
+  border-radius:12px;
+  padding:1rem;
+  margin-bottom:1rem;
+  box-shadow:0 4px 12px rgba(0,0,0,.08);
+}
+svg{
+  width:100%;
+  height:420px;
+}
+footer{
+  text-align:center;
+  font-size:.85rem;
+  color:#555;
+  padding:1rem;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>Water Phase Diagram</h1>
+  <p>Linear Pressure–Temperature Representation</p>
+</header>
+
+<main>
+
+<div class="card">
+  <h3>Phase Diagram of Water (P–T)</h3>
+  <svg id="phaseDiagram"></svg>
+</div>
+
+<div class="card">
+  <p>
+    This phase diagram is an educational, linear-scale visualization showing
+    the solid, liquid, vapor, and supercritical regions of water, including
+    the triple point and critical point.
+  </p>
+</div>
+
+</main>
+
+<footer>© 2026 EasyTech Calculators</footer>
+
+<script>
+function drawPhaseDiagram(){
+  const svg = document.getElementById("phaseDiagram");
+  svg.innerHTML = "";
+
+  const W = svg.clientWidth || 800;
+  const H = 420;
+
+  // Linear axis limits
+  const Tmin = -50;     // °C
+  const Tmax = 400;     // °C
+  const Pmin = 0;       // MPa
+  const Pmax = 25;      // MPa
+
+  const x = T => 80 + (T - Tmin) / (Tmax - Tmin) * (W - 140);
+  const y = P => H - 70 - (P - Pmin) / (Pmax - Pmin) * (H - 140);
+
+  /* ======================
+     SUBLIMATION CURVE
+     ====================== */
+  let sublimation = [];
+  for(let T=-50; T<=0; T+=2){
+    let P = 0.0006 * Math.exp(0.06 * T);
+    sublimation.push(`${x(T)},${y(P)}`);
+  }
+
+  /* ======================
+     FUSION (MELTING) CURVE
+     ====================== */
+  let fusion = [];
+  for(let P=0.0006; P<=22; P+=0.3){
+    let T = -0.007 * P + 0.01; // negative slope
+    fusion.push(`${x(T)},${y(P)}`);
+  }
+
+  /* ======================
+     VAPORIZATION CURVE
+     ====================== */
+  const vaporData = [
+    {T:0.01, P:0.000611},
+    {T:100, P:0.101},
+    {T:200, P:1.55},
+    {T:300, P:8.6},
+    {T:374, P:22.064}
+  ];
+  let vaporization = vaporData.map(p=>`${x(p.T)},${y(p.P)}`);
+
+  /* ======================
+     DRAW CURVES
+     ====================== */
+  svg.innerHTML += `
+    <polyline points="${sublimation.join(" ")}"
+      fill="none" stroke="#c62828" stroke-width="2"/>
+    <polyline points="${fusion.join(" ")}"
+      fill="none" stroke="#1565c0" stroke-width="2"/>
+    <polyline points="${vaporization.join(" ")}"
+      fill="none" stroke="#2e7d32" stroke-width="2"/>
+  `;
+
+  /* ======================
+     TRIPLE POINT
+     ====================== */
+  svg.innerHTML += `
+    <circle cx="${x(0.01)}" cy="${y(0.000611)}" r="4" fill="#000"/>
+    <text x="${x(8)}" y="${y(0.002)}" font-size="12">
+      Triple Point
+    </text>
+  `;
+
+  /* ======================
+     CRITICAL POINT
+     ====================== */
+  svg.innerHTML += `
+    <circle cx="${x(374)}" cy="${y(22.064)}" r="4" fill="#000"/>
+    <text x="${x(350)}" y="${y(23.5)}" font-size="12">
+      Critical Point
+    </text>
+  `;
+
+  /* ======================
+     REGION LABELS
+     ====================== */
+  svg.innerHTML += `
+    <text x="${x(-25)}" y="${y(6)}" font-size="14">Ice (Solid)</text>
+    <text x="${x(140)}" y="${y(12)}" font-size="14">Liquid Water</text>
+    <text x="${x(220)}" y="${y(0.3)}" font-size="14">Vapor (Steam)</text>
+    <text x="${x(300)}" y="${y(15)}" font-size="14">
+      Supercritical Fluid
+    </text>
+  `;
+
+  /* ======================
+     AXES
+     ====================== */
+  svg.innerHTML += `
+    <line x1="70" y1="30" x2="70" y2="${H-50}" stroke="#000"/>
+    <line x1="70" y1="${H-50}" x2="$
