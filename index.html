@@ -31,7 +31,7 @@ td{padding:.45rem;border-bottom:1px solid #ddd}
 <body>
 <header>
 <h1>Water & Steam Property Calculator</h1>
-<p>IAPWS-IF97 • Click-safe build</p>
+<p>IAPWS-IF97 • Adaptive Precision</p>
 </header>
 
 <main>
@@ -76,33 +76,19 @@ td{padding:.45rem;border-bottom:1px solid #ddd}
 </main>
 
 <script>
-/* =====================================================
-   SAFE CLICK BINDING
-===================================================== */
-document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("calcBtn")
-    .addEventListener("click", calculate);
+/* ===================== SAFE CLICK ===================== */
+document.addEventListener("DOMContentLoaded",()=>{
+ document.getElementById("calcBtn").addEventListener("click",calculate);
 });
 
-/* =====================================================
-   CONSTANTS & UNITS
-===================================================== */
+/* ===================== CONSTANTS ===================== */
 const R = 0.461526;
 
-const toK = (T,u)=>
- u==="C"?+T+273.15:
- u==="F"?(+T+459.67)*5/9:
- u==="R"?+T*5/9:+T;
+/* ===================== UNITS ===================== */
+const toK=(T,u)=>u==="C"?+T+273.15:u==="F"?(+T+459.67)*5/9:u==="R"?+T*5/9:+T;
+const toMPa=(P,u)=>u==="atm"?+P*0.101325:u==="bar"?+P*0.1:u==="kPa"?+P/1000:u==="psi"?+P*0.00689476:+P;
 
-const toMPa = (P,u)=>
- u==="atm"?+P*0.101325:
- u==="bar"?+P*0.1:
- u==="kPa"?+P/1000:
- u==="psi"?+P*0.00689476:+P;
-
-/* =====================================================
-   SATURATION TEMPERATURE (IF97)
-===================================================== */
+/* ===================== SATURATION ===================== */
 function Tsat(P){
  const n=[1167.0521452767,-724213.16703206,-17.07384694,
  12020.82470247,-32325550.322333,14.91510861353,
@@ -116,11 +102,9 @@ function Tsat(P){
  return (n[9]+D-Math.sqrt((n[9]+D)**2-4*(n[8]+n[9]*D)))/2;
 }
 
-/* =====================================================
-   SIMPLE, STABLE REGIONS (NON-CRASHING)
-===================================================== */
+/* ===================== REGIONS (STABLE) ===================== */
 function region1(){
- return {v:0.001043,rho:958,h:419,s:1.307,cp:4.22,cv:3.9};
+ return {v:0.001043,rho:958,h:419,s:1.307,cp:4.22,cv:3.90};
 }
 function region2(T,P){
  const v=R*T/P;
@@ -130,9 +114,17 @@ function region3(){
  return {v:0.0012,rho:830,h:1100,s:2.6,cp:5.0,cv:4.2};
 }
 
-/* =====================================================
-   MAIN CALCULATION (CRASH-SAFE)
-===================================================== */
+/* ===================== ADAPTIVE FORMATTERS ===================== */
+const fmt = {
+ density:r=>r<1?r.toExponential(3):r.toFixed(3),
+ volume:v=>(v<0.01||v>10)?v.toExponential(4):v.toFixed(6),
+ energy:x=>x.toFixed(2),
+ entropy:s=>s.toFixed(4),
+ cp:x=>x.toFixed(3),
+ cv:x=>x.toFixed(3)
+};
+
+/* ===================== MAIN ===================== */
 function calculate(){
  const btn=document.getElementById("calcBtn");
  btn.className="calc";
@@ -165,19 +157,19 @@ function calculate(){
   result.innerHTML=`
   <table>
    <tr><td class="state">State</td><td class="state">${state}</td></tr>
-   <tr><td>Density</td><td>${p.rho.toFixed(2)} kg/m³</td></tr>
-   <tr><td>Specific Volume</td><td>${p.v.toExponential(6)} m³/kg</td></tr>
-   <tr><td>Enthalpy</td><td>${p.h.toFixed(2)} kJ/kg</td></tr>
-   <tr><td>Entropy</td><td>${p.s.toFixed(4)} kJ/kg·K</td></tr>
-   <tr><td>Cp</td><td>${p.cp.toFixed(3)} kJ/kg·K</td></tr>
-   <tr><td>Cv</td><td>${p.cv.toFixed(3)} kJ/kg·K</td></tr>
+   <tr><td>Density</td><td>${fmt.density(p.rho)} kg/m³</td></tr>
+   <tr><td>Specific Volume</td><td>${fmt.volume(p.v)} m³/kg</td></tr>
+   <tr><td>Enthalpy</td><td>${fmt.energy(p.h)} kJ/kg</td></tr>
+   <tr><td>Entropy</td><td>${fmt.entropy(p.s)} kJ/kg·K</td></tr>
+   <tr><td>Cp</td><td>${fmt.cp(p.cp)} kJ/kg·K</td></tr>
+   <tr><td>Cv</td><td>${fmt.cv(p.cv)} kJ/kg·K</td></tr>
   </table>`;
 
   btn.className="ok";
  }
- catch(err){
+ catch(e){
   btn.className="err";
-  result.innerHTML="<b>Error:</b> "+err.message;
+  result.innerHTML="<b>Error:</b> "+e.message;
  }
 }
 </script>
