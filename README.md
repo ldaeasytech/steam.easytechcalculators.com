@@ -1,2 +1,2 @@
 # steam.easytechcalculators.com
-Steam Table Calculator
+Water Thermodynamic Properties Calculator
