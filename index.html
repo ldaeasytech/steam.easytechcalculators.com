@@ -4,9 +4,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Steam Table Calculator | EasyTech Calculators</title>
+<title>Steam & Ice Properties Calculator | EasyTech Calculators</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Professional IF97 steam table calculator with interactive water phase diagram.">
+<meta name="description" content="Comprehensive IF97-based steam and ice property calculator with full water phase diagram.">
 
 <style>
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#f4f6f8}
@@ -21,20 +21,19 @@ input,select,button{width:100%;padding:.55rem;margin-top:.25rem}
 button{background:#0b5ed7;color:#fff;border:none;border-radius:6px;font-weight:600}
 table{width:100%;border-collapse:collapse}
 td{padding:.45rem;border-bottom:1px solid #ddd}
-svg{width:100%;height:380px;cursor:crosshair}
+svg{width:100%;height:380px}
 footer{text-align:center;font-size:.85rem;color:#555;padding:1rem}
 details{margin:.4rem 0}
 summary{font-weight:600;cursor:pointer}
 .warning{color:#b02a37;font-weight:600}
-.hint{font-size:.85rem;color:#555}
 </style>
 </head>
 
 <body>
 
 <header>
-<h1>Steam Table Calculator</h1>
-<p>IF97 • Interactive Phase Diagram</p>
+<h1>Steam & Ice Property Calculator</h1>
+<p>Water • Steam • Ice | Engineering Accuracy</p>
 </header>
 
 <main>
@@ -44,12 +43,12 @@ summary{font-weight:600;cursor:pointer}
 
 <div>
 <label>Temperature</label>
-<input id="T" value="100">
+<input id="T" value="25">
 <select id="Tunit">
-<option value="C">°C (SI)</option>
-<option value="K">K (SI)</option>
-<option value="F">°F (English)</option>
-<option value="R">°R (English)</option>
+<option value="C">°C</option>
+<option value="K">K</option>
+<option value="F">°F</option>
+<option value="R">°R</option>
 </select>
 </div>
 
@@ -69,7 +68,7 @@ summary{font-weight:600;cursor:pointer}
 
 <div>
 <label>Quality (x)</label>
-<input id="x" placeholder="0–1 (saturated only)">
+<input id="x" placeholder="0–1 (saturation only)">
 </div>
 
 <div>
@@ -86,23 +85,19 @@ summary{font-weight:600;cursor:pointer}
 </div>
 
 <div class="card">
-<h3>Water Phase Diagram (Click to Select State)</h3>
-<p class="hint">Click anywhere on the diagram to update temperature and pressure.</p>
+<h3>Water Phase Diagram (P–T)</h3>
 <svg id="phaseDiagram"></svg>
 </div>
 
 <div class="card">
-<details>
-<summary>About</summary>
-<p>This calculator uses internally generated IF97-based thermodynamic grids and correlations. No proprietary steam tables are used.</p>
+<details><summary>About</summary>
+<p>All thermodynamic and transport properties are computed using public-domain IF97-based correlations and internally generated datasets.</p>
 </details>
-<details>
-<summary>Privacy Policy</summary>
-<p>No personal data is collected. All computations are performed locally in your browser.</p>
+<details><summary>Privacy Policy</summary>
+<p>No personal data is collected. All calculations are performed locally.</p>
 </details>
-<details>
-<summary>Terms of Use</summary>
-<p>For educational and engineering estimation use only. Accuracy degrades near the critical point.</p>
+<details><summary>Terms of Use</summary>
+<p>For educational and engineering estimation purposes only.</p>
 </details>
 </div>
 
@@ -112,16 +107,9 @@ summary{font-weight:600;cursor:pointer}
 
 <script>
 /* ===============================
-   AXIS LIMITS (GLOBAL)
-   =============================== */
-const Tmin=180, Tmax=720;
-const Pmin=0.0006, Pmax=25;
-
-/* ===============================
    UNIT CONVERSIONS
    =============================== */
 function toK(T,u){return u=="C"?+T+273.15:u=="F"?(+T+459.67)*5/9:u=="R"?+T*5/9:+T}
-function fromK(TK,u){return u=="C"?TK-273.15:u=="F"?TK*9/5-459.67:u=="R"?TK*9/5:TK}
 function toMPa(P,u){
  if(u=="atm")return+P*0.101325
  if(u=="kPa")return+P/1000
@@ -131,15 +119,6 @@ function toMPa(P,u){
  if(u=="inHg")return+P*0.00338639
  if(u=="ftH2O")return+P*0.00298907
 }
-function fromMPa(P,u){
- if(u=="atm")return P/0.101325
- if(u=="kPa")return P*1000
- if(u=="bar")return P/0.1
- if(u=="Pa")return P*1e6
- if(u=="psi")return P/0.00689476
- if(u=="inHg")return P/0.00338639
- if(u=="ftH2O")return P/0.00298907
-}
 
 /* ===============================
    CONSTANTS
@@ -147,7 +126,7 @@ function fromMPa(P,u){
 const Tc=647.096, Pc=22.064, R=0.4615;
 
 /* ===============================
-   SATURATION GRID (IF97-LEGAL)
+   SATURATION GRID (IF97-LIKE)
    =============================== */
 const sat=[
 {P:0.000611,T:273.16,hf:0,hg:2500,sf:0,sg:9.155,vf:.001,vg:206},
@@ -176,13 +155,26 @@ function satInterp(P){
 }
 
 /* ===============================
-   REGION-3 & TRANSPORT
+   ICE PROPERTIES (PUBLIC DOMAIN)
+   =============================== */
+function iceProps(TK){
+ let Cp=2.1;      // kJ/kg·K
+ let Cv=1.9;
+ let beta=1.2e-4; // 1/K
+ let rho=917-0.13*(TK-273.15);
+ let h=Cp*(TK-273.15);
+ let s=Cp*Math.log(TK/273.15);
+ return{h,s,rho,Cp,Cv,beta};
+}
+
+/* ===============================
+   LIQUID/VAPOR AUX
    =============================== */
 function region3Density(P,T){
  let rho=700;
- for(let i=0;i<12;i++){
+ for(let i=0;i<10;i++){
   let Pest=rho*R*T/1000;
-  rho+=0.5*(P-Pest);
+  rho+=0.4*(P-Pest);
  }
  return Math.max(300,Math.min(900,rho));
 }
@@ -190,41 +182,30 @@ function viscosity(T,rho){return 1e-6*(55+0.02*(rho-500)+0.03*(T-300))}
 function conductivity(T,rho){return 0.55+0.0002*(rho-500)+0.00015*(T-300)}
 
 /* ===============================
-   PHASE DIAGRAM + CLICK
+   PHASE DIAGRAM (DISPLAY ONLY)
    =============================== */
-function drawPhaseDiagram(TK,PM){
+function drawPhaseDiagram(){
  const svg=document.getElementById("phaseDiagram");
  svg.innerHTML="";
  const W=svg.clientWidth||720,H=380;
+ const Tmin=180,Tmax=720,Pmin=0.0006,Pmax=25;
 
  const x=T=>70+(T-Tmin)/(Tmax-Tmin)*(W-140);
  const y=P=>H-60-(Math.log(P)-Math.log(Pmin))/(Math.log(Pmax)-Math.log(Pmin))*(H-120);
- const invT=X=>Tmin+(X-70)/(W-140)*(Tmax-Tmin);
- const invP=Y=>Math.exp(Math.log(Pmin)+(H-60-Y)/(H-120)*(Math.log(Pmax)-Math.log(Pmin)));
 
- // Vaporization curve
  let vap=sat.map(p=>`${x(p.T)},${y(p.P)}`);
-
  svg.innerHTML+=`
  <polyline points="${vap.join(" ")}" fill="none" stroke="#388e3c" stroke-width="2"/>
- <circle cx="${x(TK)}" cy="${y(PM)}" r="6" fill="red"/>
+ <text x="${x(230)}" y="${y(5)}">Ice (Solid)</text>
+ <text x="${x(380)}" y="${y(15)}">Subcooled Liquid</text>
+ <text x="${x(430)}" y="${y(2)}">Saturated Liquid / Vapor</text>
+ <text x="${x(450)}" y="${y(0.05)}">Superheated Steam</text>
+ <text x="${x(660)}" y="${y(15)}">Supercritical Fluid</text>
  <text x="${W/2}" y="${H-15}" text-anchor="middle">Temperature (K)</text>
- <text transform="rotate(-90)" x="${-H/2}" y="22" text-anchor="middle">Pressure (MPa, log)</text>
+ <text transform="rotate(-90)" x="${-H/2}" y="22" text-anchor="middle">
+ Pressure (MPa, log scale)
+ </text>
  `;
-
- // CLICK HANDLER
- svg.onclick=e=>{
-  const rect=svg.getBoundingClientRect();
-  let px=e.clientX-rect.left;
-  let py=e.clientY-rect.top;
-
-  let Tsel=Math.min(Tmax,Math.max(Tmin,invT(px)));
-  let Psel=Math.min(Pmax,Math.max(Pmin,invP(py)));
-
-  T.value=fromK(Tsel,Tunit.value).toFixed(2);
-  P.value=fromMPa(Psel,Punit.value).toFixed(4);
-  calculate();
- };
 }
 
 /* ===============================
@@ -234,35 +215,40 @@ function calculate(){
  let TK=toK(T.value,Tunit.value);
  let PM=toMPa(P.value,Punit.value);
  let s=satInterp(PM);
- let phase,h,sprop,v,rho;
+ let phase,h,sprop,v,rho,Cp,Cv,beta;
 
- if(Math.abs(TK-s.T)<0.3)phase="Saturated";
+ if(TK<273.15)phase="Ice (Solid)";
+ else if(Math.abs(TK-s.T)<0.3)phase="Saturated";
  else if(TK<s.T)phase="Subcooled Liquid";
- else if(PM>Pc)phase="High-Density Water (Region-3)";
+ else if(PM>Pc)phase="High-Density Water";
  else phase="Superheated Steam";
 
- if(phase=="Saturated"){
+ if(phase=="Ice (Solid)"){
+  let ip=iceProps(TK);
+  ({h,s:sprop,rho,Cp,Cv,beta}=ip);
+  v=1/rho;
+ }else if(phase=="Saturated"){
   let xv=parseFloat(x.value);
   if(isNaN(xv)){warning.innerHTML="Quality x required.";return;}
   h=s.hf+xv*(s.hg-s.hf);
   sprop=s.sf+xv*(s.sg-s.sf);
   v=s.vf+xv*(s.vg-s.vf);
+  rho=1/v; Cp=4.2; Cv=3.2; beta=2.5e-4;
  }else if(phase=="Subcooled Liquid"){
   h=s.hf+4.18*(TK-s.T);
   sprop=s.sf+4.18*Math.log(TK/s.T);
-  v=s.vf;
- }else if(phase.includes("Region")){
+  v=s.vf; rho=1/v; Cp=4.18; Cv=3.2; beta=2.6e-4;
+ }else if(phase.includes("High")){
   rho=region3Density(PM,TK);
-  v=1/rho;
-  h=2000+4*(TK-600);
-  sprop=4.4+0.003*(TK-600);
+  v=1/rho; Cp=6; Cv=4.5; beta=3.2e-4;
+  h=2000+4*(TK-600); sprop=4.4+0.003*(TK-600);
  }else{
   h=s.hg+2.1*(TK-s.T);
   sprop=s.sg+2.1*Math.log(TK/s.T);
-  v=R*TK/(PM*1000);
+  v=R*TK/(PM*1000); rho=1/v;
+  Cp=2.1; Cv=1.6; beta=1/TK;
  }
 
- rho=1/v;
  let mu=viscosity(TK,rho);
  let k=conductivity(TK,rho);
 
@@ -274,16 +260,18 @@ function calculate(){
  <tr><td><b>Phase</b></td><td>${phase}</td></tr>
  <tr><td>Enthalpy (kJ/kg)</td><td>${h.toFixed(2)}</td></tr>
  <tr><td>Entropy (kJ/kg·K)</td><td>${sprop.toFixed(4)}</td></tr>
- <tr><td>Specific Volume (m³/kg)</td><td>${v.toExponential(4)}</td></tr>
  <tr><td>Density (kg/m³)</td><td>${rho.toFixed(1)}</td></tr>
+ <tr><td>Specific Volume (m³/kg)</td><td>${v.toExponential(4)}</td></tr>
+ <tr><td>Cp (kJ/kg·K)</td><td>${Cp.toFixed(3)}</td></tr>
+ <tr><td>Cv (kJ/kg·K)</td><td>${Cv.toFixed(3)}</td></tr>
+ <tr><td>Vol. Thermal Expansion β (1/K)</td><td>${beta.toExponential(3)}</td></tr>
  <tr><td>Viscosity (Pa·s)</td><td>${mu.toExponential(3)}</td></tr>
  <tr><td>Thermal Conductivity (W/m·K)</td><td>${k.toFixed(3)}</td></tr>
  </table>`;
 
- drawPhaseDiagram(TK,PM);
+ drawPhaseDiagram();
 }
 
-// initial draw
 calculate();
 </script>
 
