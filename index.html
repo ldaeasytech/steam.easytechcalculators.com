@@ -163,18 +163,71 @@ function region3Density(P,T){
 }
 
 /* ---------- PHASE DIAGRAM ---------- */
-function drawPhaseDiagram(T,P){
- const svg=document.getElementById("phaseDiagram")
- svg.innerHTML=""
- const W=svg.clientWidth,H=svg.clientHeight
- const mapT=t=>40+(t-273)/(650-273)*(W-80)
- const mapP=p=>H-40-Math.log(p/.05)/Math.log(Pc/.05)*(H-80)
- let pts=sat.map(p=>`${mapT(p.T)},${mapP(p.P)}`).join(" ")
- svg.innerHTML=`
- <polyline points="${pts}" fill="none" stroke="#0b5ed7" stroke-width="2"/>
- <circle cx="${mapT(T)}" cy="${mapP(P)}" r="5" fill="red"/>
- `
+<script>
+function drawPhaseDiagram(TK, PM) {
+  const svg = document.getElementById("phaseDiagram");
+  svg.innerHTML = "";
+
+  const W = svg.clientWidth || 600;
+  const H = 320;
+
+  // Axis limits
+  const Tmin = 200, Tmax = 800;
+  const Pmin = 0.0006, Pmax = 22.064;
+
+  // Mapping (log-pressure)
+  const x = T => 50 + (T - Tmin) / (Tmax - Tmin) * (W - 100);
+  const y = P => H - 40 - (Math.log(P) - Math.log(Pmin)) /
+                 (Math.log(Pmax) - Math.log(Pmin)) * (H - 80);
+
+  // --- Sublimation curve (approx) ---
+  let sub = [];
+  for (let T = 200; T <= 273.16; T += 2) {
+    let P = 0.0006 * Math.exp(0.07 * (T - 200));
+    sub.push(`${x(T)},${y(P)}`);
+  }
+
+  // --- Fusion line (negative slope for water) ---
+  let fus = [];
+  for (let P = 0.0006; P <= 22; P *= 1.25) {
+    let T = 273.16 - 7 * Math.log(P + 1);
+    fus.push(`${x(T)},${y(P)}`);
+  }
+
+  // --- Vaporization curve (from IF97 sat table) ---
+  let vap = sat.map(p => `${x(p.T)},${y(p.P)}`);
+
+  // --- Triple & Critical points ---
+  const triple = {T:273.16, P:0.000611};
+  const critical = {T:647.096, P:22.064};
+
+  svg.innerHTML = `
+    <polyline points="${sub.join(" ")}"
+      fill="none" stroke="#d32f2f" stroke-width="2"/>
+
+    <polyline points="${fus.join(" ")}"
+      fill="none" stroke="#1976d2" stroke-width="2"/>
+
+    <polyline points="${vap.join(" ")}"
+      fill="none" stroke="#388e3c" stroke-width="2"/>
+
+    <!-- Triple point -->
+    <circle cx="${x(triple.T)}" cy="${y(triple.P)}" r="4" fill="#000"/>
+    <text x="${x(triple.T)+6}" y="${y(triple.P)+4}" font-size="11">
+      Triple Point
+    </text>
+
+    <!-- Critical point -->
+    <circle cx="${x(critical.T)}" cy="${y(critical.P)}" r="4" fill="#000"/>
+    <text x="${x(critical.T)-80}" y="${y(critical.P)-6}" font-size="11">
+      Critical Point
+    </text>
+
+    <!-- User state -->
+    <circle cx="${x(TK)}" cy="${y(PM)}" r="6" fill="red"/>
+  `;
 }
+</script>
 
 /* ---------- MAIN SOLVER ---------- */
 function calculate(){
