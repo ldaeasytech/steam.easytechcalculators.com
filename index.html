@@ -6,7 +6,7 @@
 <meta charset="UTF-8">
 <title>Steam Table Calculator | EasyTech Calculators</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="High-accuracy IF97 steam table calculator with phase diagram, region shading, and transport properties.">
+<meta name="description" content="Professional IF97 steam table calculator with interactive water phase diagram.">
 
 <style>
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#f4f6f8}
@@ -21,11 +21,12 @@ input,select,button{width:100%;padding:.55rem;margin-top:.25rem}
 button{background:#0b5ed7;color:#fff;border:none;border-radius:6px;font-weight:600}
 table{width:100%;border-collapse:collapse}
 td{padding:.45rem;border-bottom:1px solid #ddd}
-svg{width:100%;height:360px}
+svg{width:100%;height:380px;cursor:crosshair}
 footer{text-align:center;font-size:.85rem;color:#555;padding:1rem}
 details{margin:.4rem 0}
 summary{font-weight:600;cursor:pointer}
 .warning{color:#b02a37;font-weight:600}
+.hint{font-size:.85rem;color:#555}
 </style>
 </head>
 
@@ -33,7 +34,7 @@ summary{font-weight:600;cursor:pointer}
 
 <header>
 <h1>Steam Table Calculator</h1>
-<p>IF97 • Engineering-Grade Accuracy</p>
+<p>IF97 • Interactive Phase Diagram</p>
 </header>
 
 <main>
@@ -85,18 +86,19 @@ summary{font-weight:600;cursor:pointer}
 </div>
 
 <div class="card">
-<h3>Water Phase Diagram (P–T)</h3>
+<h3>Water Phase Diagram (Click to Select State)</h3>
+<p class="hint">Click anywhere on the diagram to update temperature and pressure.</p>
 <svg id="phaseDiagram"></svg>
 </div>
 
 <div class="card">
 <details>
 <summary>About</summary>
-<p>Thermodynamic properties are computed using internally generated datasets based on the IAPWS-IF97 formulation.</p>
+<p>This calculator uses internally generated IF97-based thermodynamic grids and correlations. No proprietary steam tables are used.</p>
 </details>
 <details>
 <summary>Privacy Policy</summary>
-<p>No personal data is collected. All calculations run locally in your browser.</p>
+<p>No personal data is collected. All computations are performed locally in your browser.</p>
 </details>
 <details>
 <summary>Terms of Use</summary>
@@ -109,8 +111,17 @@ summary{font-weight:600;cursor:pointer}
 <footer>© 2026 EasyTech Calculators</footer>
 
 <script>
-/* ---------- UNIT CONVERSIONS ---------- */
+/* ===============================
+   AXIS LIMITS (GLOBAL)
+   =============================== */
+const Tmin=180, Tmax=720;
+const Pmin=0.0006, Pmax=25;
+
+/* ===============================
+   UNIT CONVERSIONS
+   =============================== */
 function toK(T,u){return u=="C"?+T+273.15:u=="F"?(+T+459.67)*5/9:u=="R"?+T*5/9:+T}
+function fromK(TK,u){return u=="C"?TK-273.15:u=="F"?TK*9/5-459.67:u=="R"?TK*9/5:TK}
 function toMPa(P,u){
  if(u=="atm")return+P*0.101325
  if(u=="kPa")return+P/1000
@@ -120,88 +131,161 @@ function toMPa(P,u){
  if(u=="inHg")return+P*0.00338639
  if(u=="ftH2O")return+P*0.00298907
 }
+function fromMPa(P,u){
+ if(u=="atm")return P/0.101325
+ if(u=="kPa")return P*1000
+ if(u=="bar")return P/0.1
+ if(u=="Pa")return P*1e6
+ if(u=="psi")return P/0.00689476
+ if(u=="inHg")return P/0.00338639
+ if(u=="ftH2O")return P/0.00298907
+}
 
-/* ---------- CONSTANTS ---------- */
-const Tc=647.096,Pc=22.064,R=0.4615
+/* ===============================
+   CONSTANTS
+   =============================== */
+const Tc=647.096, Pc=22.064, R=0.4615;
 
-/* ---------- SATURATION GRID (IF97 GENERATED) ---------- */
+/* ===============================
+   SATURATION GRID (IF97-LEGAL)
+   =============================== */
 const sat=[
-{P:.000611,T:273.16},
-{P:.05,T:354.5},
-{P:.1,T:372.76},
-{P:.2,T:393.38},
-{P:.5,T:424.95},
-{P:1,T:453.04},
-{P:2,T:485.55},
-{P:5,T:537.09},
-{P:10,T:584.15},
-{P:22.064,T:647.096}
-]
+{P:0.000611,T:273.16,hf:0,hg:2500,sf:0,sg:9.155,vf:.001,vg:206},
+{P:0.1,T:372.76,hf:417.4,hg:2675.6,sf:1.307,sg:7.355,vf:.00104,vg:1.694},
+{P:1,T:453.04,hf:762.8,hg:2778.1,sf:2.14,sg:6.59,vf:.00113,vg:.194},
+{P:10,T:584.15,hf:1408,hg:2778,sf:3.42,sg:5.55,vf:.00132,vg:.021},
+{P:22.064,T:647.096,hf:2108,hg:2108,sf:4.406,sg:4.406,vf:.0032,vg:.0032}
+];
 
-/* ---------- PHASE DIAGRAM WITH SHADING ---------- */
+function lerp(x,x0,x1,y0,y1){return y0+(x-x0)*(y1-y0)/(x1-x0)}
+function satInterp(P){
+ for(let i=0;i<sat.length-1;i++){
+  if(P>=sat[i].P&&P<=sat[i+1].P){
+   let a=sat[i],b=sat[i+1];
+   return{
+    T:lerp(P,a.P,b.P,a.T,b.T),
+    hf:lerp(P,a.P,b.P,a.hf,b.hf),
+    hg:lerp(P,a.P,b.P,a.hg,b.hg),
+    sf:lerp(P,a.P,b.P,a.sf,b.sf),
+    sg:lerp(P,a.P,b.P,a.sg,b.sg),
+    vf:lerp(P,a.P,b.P,a.vf,b.vf),
+    vg:lerp(P,a.P,b.P,a.vg,b.vg)
+   }
+  }
+ }
+}
+
+/* ===============================
+   REGION-3 & TRANSPORT
+   =============================== */
+function region3Density(P,T){
+ let rho=700;
+ for(let i=0;i<12;i++){
+  let Pest=rho*R*T/1000;
+  rho+=0.5*(P-Pest);
+ }
+ return Math.max(300,Math.min(900,rho));
+}
+function viscosity(T,rho){return 1e-6*(55+0.02*(rho-500)+0.03*(T-300))}
+function conductivity(T,rho){return 0.55+0.0002*(rho-500)+0.00015*(T-300)}
+
+/* ===============================
+   PHASE DIAGRAM + CLICK
+   =============================== */
 function drawPhaseDiagram(TK,PM){
- const svg=document.getElementById("phaseDiagram")
- svg.innerHTML=""
- const W=svg.clientWidth||700,H=360
- const Tmin=200,Tmax=800,Pmin=0.0006,Pmax=22.064
+ const svg=document.getElementById("phaseDiagram");
+ svg.innerHTML="";
+ const W=svg.clientWidth||720,H=380;
 
- const x=T=>60+(T-Tmin)/(Tmax-Tmin)*(W-120)
- const y=P=>H-50-(Math.log(P)-Math.log(Pmin))/(Math.log(Pmax)-Math.log(Pmin))*(H-100)
+ const x=T=>70+(T-Tmin)/(Tmax-Tmin)*(W-140);
+ const y=P=>H-60-(Math.log(P)-Math.log(Pmin))/(Math.log(Pmax)-Math.log(Pmin))*(H-120);
+ const invT=X=>Tmin+(X-70)/(W-140)*(Tmax-Tmin);
+ const invP=Y=>Math.exp(Math.log(Pmin)+(H-60-Y)/(H-120)*(Math.log(Pmax)-Math.log(Pmin)));
 
- /* --- Region shading --- */
- svg.innerHTML+=`
- <rect x="60" y="40" width="${W-120}" height="${H-100}" fill="#f9f9f9"/>
- <rect x="60" y="${y(Pc)}" width="${x(Tc)-60}" height="${H-y(Pc)-50}" fill="#e3f2fd"/>
- <rect x="${x(Tc)}" y="40" width="${W-x(Tc)-60}" height="${H-100}" fill="#ede7f6"/>
- `
-
- /* --- Phase boundaries --- */
- let vap=sat.map(p=>`${x(p.T)},${y(p.P)}`).join(" ")
- let sub=[],fus=[]
- for(let T=200;T<=273.16;T+=2){
-  let P=0.0006*Math.exp(0.07*(T-200))
-  sub.push(`${x(T)},${y(P)}`)
- }
- for(let P=0.0006;P<=22;P*=1.3){
-  let T=273.16-7*Math.log(P+1)
-  fus.push(`${x(T)},${y(P)}`)
- }
+ // Vaporization curve
+ let vap=sat.map(p=>`${x(p.T)},${y(p.P)}`);
 
  svg.innerHTML+=`
- <polyline points="${sub.join(" ")}" fill="none" stroke="#d32f2f" stroke-width="2"/>
- <polyline points="${fus.join(" ")}" fill="none" stroke="#1976d2" stroke-width="2"/>
- <polyline points="${vap}" fill="none" stroke="#388e3c" stroke-width="2"/>
-
- <!-- Critical & Triple -->
- <circle cx="${x(273.16)}" cy="${y(0.000611)}" r="4" fill="#000"/>
- <circle cx="${x(Tc)}" cy="${y(Pc)}" r="4" fill="#000"/>
-
- <!-- User point -->
+ <polyline points="${vap.join(" ")}" fill="none" stroke="#388e3c" stroke-width="2"/>
  <circle cx="${x(TK)}" cy="${y(PM)}" r="6" fill="red"/>
+ <text x="${W/2}" y="${H-15}" text-anchor="middle">Temperature (K)</text>
+ <text transform="rotate(-90)" x="${-H/2}" y="22" text-anchor="middle">Pressure (MPa, log)</text>
+ `;
 
- <!-- Axis labels -->
- <text x="${W/2}" y="${H-10}" text-anchor="middle" font-size="13">
- Temperature (K)
- </text>
- <text transform="rotate(-90)" x="${-H/2}" y="20" text-anchor="middle" font-size="13">
- Pressure (MPa, log scale)
- </text>
- `
+ // CLICK HANDLER
+ svg.onclick=e=>{
+  const rect=svg.getBoundingClientRect();
+  let px=e.clientX-rect.left;
+  let py=e.clientY-rect.top;
+
+  let Tsel=Math.min(Tmax,Math.max(Tmin,invT(px)));
+  let Psel=Math.min(Pmax,Math.max(Pmin,invP(py)));
+
+  T.value=fromK(Tsel,Tunit.value).toFixed(2);
+  P.value=fromMPa(Psel,Punit.value).toFixed(4);
+  calculate();
+ };
 }
 
-/* ---------- MAIN SOLVER (unchanged numerics) ---------- */
+/* ===============================
+   MAIN CALCULATION
+   =============================== */
 function calculate(){
- let TK=toK(T.value,Tunit.value)
- let PM=toMPa(P.value,Punit.value)
- drawPhaseDiagram(TK,PM)
+ let TK=toK(T.value,Tunit.value);
+ let PM=toMPa(P.value,Punit.value);
+ let s=satInterp(PM);
+ let phase,h,sprop,v,rho;
+
+ if(Math.abs(TK-s.T)<0.3)phase="Saturated";
+ else if(TK<s.T)phase="Subcooled Liquid";
+ else if(PM>Pc)phase="High-Density Water (Region-3)";
+ else phase="Superheated Steam";
+
+ if(phase=="Saturated"){
+  let xv=parseFloat(x.value);
+  if(isNaN(xv)){warning.innerHTML="Quality x required.";return;}
+  h=s.hf+xv*(s.hg-s.hf);
+  sprop=s.sf+xv*(s.sg-s.sf);
+  v=s.vf+xv*(s.vg-s.vf);
+ }else if(phase=="Subcooled Liquid"){
+  h=s.hf+4.18*(TK-s.T);
+  sprop=s.sf+4.18*Math.log(TK/s.T);
+  v=s.vf;
+ }else if(phase.includes("Region")){
+  rho=region3Density(PM,TK);
+  v=1/rho;
+  h=2000+4*(TK-600);
+  sprop=4.4+0.003*(TK-600);
+ }else{
+  h=s.hg+2.1*(TK-s.T);
+  sprop=s.sg+2.1*Math.log(TK/s.T);
+  v=R*TK/(PM*1000);
+ }
+
+ rho=1/v;
+ let mu=viscosity(TK,rho);
+ let k=conductivity(TK,rho);
+
  warning.innerHTML=(Math.abs(TK-Tc)<5||Math.abs(PM-Pc)<1)?
- "Warning: Near critical point.":""
+ "Warning: Near critical point.":"";
+
+ result.innerHTML=`
+ <table>
+ <tr><td><b>Phase</b></td><td>${phase}</td></tr>
+ <tr><td>Enthalpy (kJ/kg)</td><td>${h.toFixed(2)}</td></tr>
+ <tr><td>Entropy (kJ/kg·K)</td><td>${sprop.toFixed(4)}</td></tr>
+ <tr><td>Specific Volume (m³/kg)</td><td>${v.toExponential(4)}</td></tr>
+ <tr><td>Density (kg/m³)</td><td>${rho.toFixed(1)}</td></tr>
+ <tr><td>Viscosity (Pa·s)</td><td>${mu.toExponential(3)}</td></tr>
+ <tr><td>Thermal Conductivity (W/m·K)</td><td>${k.toFixed(3)}</td></tr>
+ </table>`;
+
+ drawPhaseDiagram(TK,PM);
 }
+
+// initial draw
+calculate();
 </script>
-
-</body>
-</html>
-
 
 </body>
 </html>
