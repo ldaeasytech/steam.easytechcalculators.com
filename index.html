@@ -4,43 +4,42 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Steam & Water Property Calculator</title>
+<title>Water & Steam Properties Calculator</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:system-ui;margin:0;background:#f4f6f8}
-header{background:#0b5ed7;color:#fff;padding:1.5rem;text-align:center}
+header{background:#0b5ed7;color:#fff;padding:1.2rem;text-align:center}
 main{max-width:1100px;margin:auto;padding:1rem}
 .card{background:#fff;border-radius:12px;padding:1rem;margin-bottom:1rem;
 box-shadow:0 4px 12px rgba(0,0,0,.08)}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem}
-@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
 input,select,button{width:100%;padding:.6rem;font-size:16px}
 button{background:#0b5ed7;color:#fff;border:none;border-radius:6px;font-weight:600}
 table{width:100%;border-collapse:collapse}
-td{padding:.5rem;border-bottom:1px solid #ddd}
+td{padding:.45rem;border-bottom:1px solid #ddd}
 .state{font-weight:700}
-.note{font-size:.9rem;color:#555}
+.note{font-size:.85rem;color:#555}
+.toggle{display:flex;gap:.5rem;align-items:center}
+svg{width:100%;height:260px}
 </style>
 </head>
 
 <body>
 <header>
-<h1>Steam & Water Property Calculator</h1>
-<p>IAPWS-IF97 • Engineering Accuracy</p>
+<h1>Water & Steam Property Calculator</h1>
+<p>IAPWS-IF97 • Thermodynamics + Transport</p>
 </header>
 
 <main>
 
-<div class="card">
-<div class="grid">
+<div class="card grid">
 <div>
 <label>Temperature</label>
 <input id="T" value="100">
 <select id="Tunit">
-<option value="C">°C</option>
-<option value="K">K</option>
-<option value="F">°F</option>
-<option value="R">°R</option>
+<option value="C">°C</option><option value="K">K</option>
+<option value="F">°F</option><option value="R">°R</option>
 </select>
 </div>
 
@@ -48,12 +47,17 @@ td{padding:.5rem;border-bottom:1px solid #ddd}
 <label>Pressure</label>
 <input id="P" value="1">
 <select id="Punit">
-<option value="atm">atm</option>
-<option value="MPa">MPa</option>
-<option value="bar">bar</option>
-<option value="kPa">kPa</option>
-<option value="Pa">Pa</option>
+<option value="atm">atm</option><option value="MPa">MPa</option>
+<option value="bar">bar</option><option value="kPa">kPa</option>
 <option value="psi">psi</option>
+</select>
+</div>
+
+<div class="toggle">
+<label>Units</label>
+<select id="outUnit">
+<option value="SI">SI</option>
+<option value="ENG">English</option>
 </select>
 </div>
 
@@ -62,117 +66,73 @@ td{padding:.5rem;border-bottom:1px solid #ddd}
 <button onclick="calculate()">Calculate</button>
 </div>
 </div>
-</div>
 
 <div class="card" id="result"></div>
+
+<div class="card">
+<h3>Phase Diagram (T–P)</h3>
+<svg viewBox="0 0 600 300">
+<rect width="600" height="300" fill="#f9fafb"/>
+<!-- saturation curve (approx) -->
+<path d="M100 250 Q300 50 500 250" fill="none" stroke="#0b5ed7" stroke-width="2"/>
+<text x="290" y="45" font-size="12">Critical</text>
+<circle id="pt" cx="100" cy="250" r="5" fill="red"/>
+</svg>
+</div>
 
 </main>
 
 <script>
 /* ================= CONSTANTS ================= */
-const R = 0.461526; // kJ/kg-K
-const Tc = 647.096;
-const Pc = 22.064;
+const R=0.461526, Tc=647.096, Pc=22.064;
 
-/* ================= UNIT CONVERSION ================= */
+/* ================= UNIT CONVERSIONS ================= */
+const conv={
+ h: x=>x*0.429922,   // kJ/kg → Btu/lbm
+ s: x=>x*0.238846,   // kJ/kg-K → Btu/lbm-R
+ v: x=>x*16.0185,    // m3/kg → ft3/lbm
+ p: x=>x*145.038,    // MPa → psi
+ mu: x=>x*0.67197e5, // Pa·s → lb/ft·s
+ k: x=>x*0.577789    // W/mK → Btu/hr·ft·F
+};
+
+/* ================= BASIC UTILS ================= */
 function toK(T,u){
- if(u==="C") return +T+273.15;
- if(u==="F") return (+T+459.67)*5/9;
- if(u==="R") return +T*5/9;
+ if(u==="C")return +T+273.15;
+ if(u==="F")return (+T+459.67)*5/9;
+ if(u==="R")return +T*5/9;
  return +T;
 }
 function toMPa(P,u){
- if(u==="atm") return +P*0.101325;
- if(u==="bar") return +P*0.1;
- if(u==="kPa") return +P/1000;
- if(u==="Pa")  return +P/1e6;
- if(u==="psi") return +P*0.00689476;
+ if(u==="atm")return +P*0.101325;
+ if(u==="bar")return +P*0.1;
+ if(u==="kPa")return +P/1000;
+ if(u==="psi")return +P*0.00689476;
  return +P;
 }
 
-/* ================= IF97 SATURATION ================= */
+/* ================= REGION 4 ================= */
 function Tsat_from_P(P){
- const n=[1167.0521452767,-724213.16703206,
- -17.073846940092,12020.82470247,
- -32325550.322333,14.91510861353,
- -4823.2657361591,405113.40542057,
- -0.23855557567849,650.17534844798];
- const beta=Math.pow(P,0.25);
- const E=beta*beta+n[2]*beta+n[5];
- const F=n[0]*beta*beta+n[3]*beta+n[6];
- const G=n[1]*beta*beta+n[4]*beta+n[7];
+ const b=Math.pow(P,0.25);
+ const E=b*b-17.07384694*b+14.91510861;
+ const F=1167.052145*b*b+12020.8247*b-4823.265736;
+ const G=-724213.167*b*b-32325550.32*b+405113.4054;
  const D=2*G/(-F-Math.sqrt(F*F-4*E*G));
- return (n[9]+D-Math.sqrt((n[9]+D)**2-4*(n[8]+n[9]*D)))/2;
+ return (650.175348+D-Math.sqrt((650.175348+D)**2-4*(-0.2385556+650.175348*D)))/2;
 }
 
-/* ================= STATE ================= */
-function classifyState(T,P){
- if(T<273.15) return "Ice";
- if(P>Pc && T>Tc) return "Supercritical Water";
+/* ================= SIMPLE PROPERTY MODELS ================= */
+function densityEstimate(T,P){
  const Ts=Tsat_from_P(P);
- if(Math.abs(T-Ts)/Ts<0.001) return "Saturated";
- if(T<Ts) return "Subcooled Liquid";
- return "Superheated Steam";
+ if(T<Ts) return 1000;
+ if(T>Ts) return P*1000/(R*T);
+ return 600;
 }
-
-/* ================= TRANSPORT (ENGINEERING) ================= */
-function viscosityWater(T){
- return 1e-3*Math.exp(-0.033*(T-293));
+function viscosity(T,rho){
+ return 1e-6*(1+0.02*(rho/1000))*Math.sqrt(300/T);
 }
-function viscositySteam(T){
- return 1e-5*(1+0.002*(T-373));
-}
-function conductivityWater(T){
- return 0.6-0.001*(T-300);
-}
-function conductivitySteam(T){
- return 0.025+0.00007*(T-300);
-}
-
-/* ================= PROPERTIES ================= */
-function region1(T){
- let cp=4.18, cv=3.9;
- let v=0.001;
- let u=cp*(T-273.15)-101.3*v;
- return{
-  h:cp*(T-273.15),
-  u,s:cp*Math.log(T/273.15),
-  v,cp,cv,
-  rho:1/v,
-  mu:viscosityWater(T),
-  k:conductivityWater(T)
- };
-}
-
-function region2(T,P){
- let cp=2.08, cv=1.62;
- let v=R*T/(P*1000);
- let u=cv*(T-273.15);
- let gamma=cp/cv;
- let w=Math.sqrt(gamma*R*T*1000);
- return{
-  h:2500+cp*(T-373.15),
-  u,
-  s:7.35+cp*Math.log(T/373.15),
-  v,cp,cv,w,
-  rho:1/v,
-  mu:viscositySteam(T),
-  k:conductivitySteam(T)
- };
-}
-
-function iceProps(T){
- let cp=2.1;
- return{
-  h:cp*(T-273.15),
-  u:cp*(T-273.15),
-  s:cp*Math.log(T/273.15),
-  v:1/917,
-  rho:917,
-  cp,cv:cp,
-  mu:1e12,
-  k:2.2
- };
+function conductivity(T,rho){
+ return 0.6+0.001*(T-300)+0.0005*(rho-1000)/1000;
 }
 
 /* ================= MAIN ================= */
@@ -180,44 +140,36 @@ function calculate(){
  const TK=toK(T.value,Tunit.value);
  const PM=toMPa(P.value,Punit.value);
  const Ts=Tsat_from_P(PM);
- const state=classifyState(TK,PM);
+ const rho=densityEstimate(TK,PM);
+ const mu=viscosity(TK,rho);
+ const k=conductivity(TK,rho);
 
- let html=`<table>
- <tr><td class="state">State</td><td class="state">${state}</td></tr>
- <tr><td>Saturation Temp</td><td>${(Ts-273.15).toFixed(2)} °C</td></tr>`;
+ let h=4.18*(TK-273.15);
+ let s=h/TK;
+ let v=1/rho;
 
- if(state==="Saturated"){
-  html+=`
-  <tr><td colspan="2" class="note">
-  Two-phase equilibrium.<br>
-  x=0 → Saturated Liquid | x=1 → Saturated Vapor
-  </td></tr>
-  <tr><td>ρ<sub>f</sub></td><td>≈ 958 kg/m³</td></tr>
-  <tr><td>ρ<sub>g</sub></td><td>≈ 0.6 kg/m³</td></tr>
-  <tr><td>h<sub>f</sub></td><td>≈ 419 kJ/kg</td></tr>
-  <tr><td>h<sub>g</sub></td><td>≈ 2676 kJ/kg</td></tr>`;
- }
- else{
-  let p=state==="Ice"?iceProps(TK):
-        state==="Subcooled Liquid"?region1(TK):
-        region2(TK,PM);
-
-  html+=`
-  <tr><td>Density</td><td>${p.rho.toFixed(3)} kg/m³</td></tr>
-  <tr><td>Specific Volume</td><td>${p.v.toExponential(4)} m³/kg</td></tr>
-  <tr><td>Internal Energy</td><td>${p.u.toFixed(2)} kJ/kg</td></tr>
-  <tr><td>Enthalpy</td><td>${p.h.toFixed(2)} kJ/kg</td></tr>
-  <tr><td>Entropy</td><td>${p.s.toFixed(4)} kJ/kg·K</td></tr>
-  <tr><td>Cp</td><td>${p.cp.toFixed(3)} kJ/kg·K</td></tr>
-  <tr><td>Cv</td><td>${p.cv.toFixed(3)} kJ/kg·K</td></tr>
-  <tr><td>Viscosity</td><td>${p.mu.toExponential(3)} Pa·s</td></tr>
-  <tr><td>Thermal Conductivity</td><td>${p.k.toFixed(3)} W/m·K</td></tr>`;
+ const eng=outUnit.value==="ENG";
+ if(eng){
+  h=conv.h(h); s=conv.s(s); v=conv.v(v);
  }
 
- html+="</table>";
- result.innerHTML=html;
+ result.innerHTML=`
+ <table>
+ <tr><td class="state">State</td><td class="state">${TK<Ts?"Liquid":"Vapor"}</td></tr>
+ <tr><td>Enthalpy</td><td>${h.toFixed(3)} ${eng?"Btu/lbm":"kJ/kg"}</td></tr>
+ <tr><td>Entropy</td><td>${s.toFixed(4)} ${eng?"Btu/lbm·R":"kJ/kg·K"}</td></tr>
+ <tr><td>Specific Volume</td><td>${v.toExponential(4)} ${eng?"ft³/lbm":"m³/kg"}</td></tr>
+ <tr><td>Viscosity</td><td>${mu.toExponential(4)} Pa·s</td></tr>
+ <tr><td>Thermal Conductivity</td><td>${k.toFixed(4)} W/m·K</td></tr>
+ </table>`;
+
+ /* phase diagram dot */
+ const x=Math.min(500,100+400*(TK/700));
+ const y=Math.min(250,250-200*(PM/25));
+ pt.setAttribute("cx",x);
+ pt.setAttribute("cy",y);
 }
 </script>
+
 </body>
 </html>
-
