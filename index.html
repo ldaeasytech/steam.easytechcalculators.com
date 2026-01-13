@@ -6,28 +6,115 @@
 <meta charset="UTF-8">
 <title>Steam & Water Properties Calculator (IF97) | EasyTech Calculators</title>
 
-<meta name="description" content="Professional steam table and water properties calculator using IAPWS-IF97 region logic. Supports multiple units, phase detection, saturation quality, and advanced thermodynamic properties.">
+<meta name="description" content="Professional steam and water properties calculator using IAPWS-IF97. Supports multiple temperature and pressure units, phase detection, saturation quality, and advanced thermodynamic properties.">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="canonical" href="https://steam.easytechcalculators.com">
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-body{margin:0;font-family:system-ui,Arial,sans-serif;background:#f4f6f8}
-header{background:#0a3d62;color:white;padding:12px 20px}
-nav{display:flex;justify-content:space-between;align-items:center}
-nav a{color:white;margin-left:15px;text-decoration:none}
-.container{max-width:1100px;margin:auto;padding:20px}
-.card{background:white;border-radius:8px;padding:20px;margin-bottom:20px;box-shadow:0 2px 6px rgba(0,0,0,.08)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:15px}
-label{font-weight:600}
-input,select{width:100%;padding:8px;margin-top:5px}
-button{margin-top:15px;padding:12px;width:100%;background:#0a3d62;color:white;border:none;border-radius:5px;font-size:16px}
-#warnings{background:#fff3cd;border-left:5px solid #f0ad4e;padding:10px;margin-top:10px}
-#results{background:#eef2f5;padding:15px;margin-top:10px;border-radius:5px}
-.ad-box{background:#f0f0f0;text-align:center;padding:15px;color:#666;margin:20px 0}
-footer{background:#0a3d62;color:white;text-align:center;padding:15px;font-size:14px}
-footer a{color:#dff6ff;margin:0 8px}
+:root{
+  --primary:#0a3d62;
+  --bg:#f4f6f8;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:system-ui,Arial,sans-serif;
+  background:var(--bg);
+}
+header{
+  background:var(--primary);
+  color:#fff;
+  padding:12px 20px;
+}
+nav{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+}
+nav a{
+  color:#dff6ff;
+  margin-left:15px;
+  text-decoration:none;
+}
+.container{
+  max-width:1100px;
+  margin:auto;
+  padding:15px;
+}
+.card{
+  background:#fff;
+  border-radius:10px;
+  padding:20px;
+  margin-bottom:20px;
+  box-shadow:0 3px 8px rgba(0,0,0,.08);
+}
+h2,h3{margin-top:0}
+.row{
+  display:grid;
+  grid-template-columns:2fr 1fr;
+  gap:15px;
+  margin-bottom:15px;
+}
+@media(max-width:700px){
+  .row{grid-template-columns:1fr}
+}
+label{
+  font-weight:600;
+  display:block;
+  margin-bottom:4px;
+}
+input,select{
+  width:100%;
+  padding:10px;
+  font-size:16px;
+}
+button{
+  margin-top:10px;
+  padding:14px;
+  width:100%;
+  background:var(--primary);
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  font-size:17px;
+}
+#warnings{
+  background:#fff3cd;
+  border-left:5px solid #f0ad4e;
+  padding:12px;
+  margin-top:15px;
+}
+#results{
+  margin-top:15px;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:12px;
+}
+.result-box{
+  background:#eef2f5;
+  padding:12px;
+  border-radius:6px;
+}
+.ad-box{
+  background:#eee;
+  text-align:center;
+  padding:15px;
+  margin:20px 0;
+  color:#666;
+}
+footer{
+  background:var(--primary);
+  color:#fff;
+  text-align:center;
+  padding:15px;
+  font-size:14px;
+}
+footer a{
+  color:#dff6ff;
+  margin:0 10px;
+}
 canvas{margin-top:20px}
 </style>
 </head>
@@ -48,50 +135,59 @@ canvas{margin-top:20px}
 <div class="container">
 
 <div class="card">
-<h2>Steam & Water Properties Calculator (IF97)</h2>
+<h2>Steam & Water Properties Calculator</h2>
 
-<div class="grid">
-<div>
-<label>Pressure</label>
-<input type="number" id="pressure" step="any">
+<!-- ROW 1: TEMPERATURE -->
+<div class="row">
+  <div>
+    <label>Temperature</label>
+    <input type="number" id="temperature" step="any">
+  </div>
+  <div>
+    <label>Temperature Unit</label>
+    <select id="tempUnit">
+      <optgroup label="SI">
+        <option value="C">°C</option>
+        <option value="K">K</option>
+      </optgroup>
+      <optgroup label="English">
+        <option value="F">°F</option>
+        <option value="R">°R</option>
+      </optgroup>
+    </select>
+  </div>
 </div>
 
-<div>
-<label>Pressure Unit</label>
-<select id="pressureUnit">
-<optgroup label="SI">
-<option value="Pa">Pa</option>
-<option value="kPa">kPa</option>
-<option value="bar">bar</option>
-<option value="atm">atm</option>
-</optgroup>
-<optgroup label="English / Imperial">
-<option value="psi">psi</option>
-<option value="inHg">inHg</option>
-<option value="ftH2O">ft H₂O</option>
-</optgroup>
-</select>
+<!-- ROW 2: PRESSURE -->
+<div class="row">
+  <div>
+    <label>Pressure</label>
+    <input type="number" id="pressure" step="any">
+  </div>
+  <div>
+    <label>Pressure Unit</label>
+    <select id="pressureUnit">
+      <optgroup label="SI">
+        <option value="Pa">Pa</option>
+        <option value="kPa">kPa</option>
+        <option value="bar">bar</option>
+        <option value="atm">atm</option>
+      </optgroup>
+      <optgroup label="English">
+        <option value="psi">psi</option>
+        <option value="inHg">inHg</option>
+        <option value="ftH2O">ft H₂O</option>
+      </optgroup>
+    </select>
+  </div>
 </div>
 
-<div>
-<label>Temperature</label>
-<input type="number" id="temperature" step="any">
-</div>
-
-<div>
-<label>Temperature Unit</label>
-<select id="tempUnit">
-<option value="C">°C</option>
-<option value="K">K</option>
-<option value="F">°F</option>
-<option value="R">°R</option>
-</select>
-</div>
-
-<div>
-<label>Quality x (saturation only)</label>
-<input type="number" id="quality" step="0.01" min="0" max="1">
-</div>
+<!-- ROW 3: QUALITY -->
+<div class="row">
+  <div>
+    <label>Quality x (saturation only)</label>
+    <input type="number" id="quality" step="0.01" min="0" max="1">
+  </div>
 </div>
 
 <button onclick="calculate()">Calculate Properties</button>
@@ -118,12 +214,9 @@ canvas{margin-top:20px}
 
 <script>
 // ================= CONSTANTS =================
-const R = 0.461526;
-const Pc = 22.064;
-const Tc = 647.096;
-const Mw = 18.01528;
+const R=0.461526, Pc=22.064, Tc=647.096;
 
-// ================= UNIT CONVERSIONS =================
+// ================= CONVERSIONS =================
 function pressureToMPa(P,u){
   return u==="Pa"?P*1e-6:
          u==="kPa"?P*1e-3:
@@ -140,19 +233,12 @@ function tempToK(T,u){
          T*5/9;
 }
 
-// ================= IF97 REGION 4 (SATURATION) =================
+// ================= IF97 REGION 4 =================
 function Tsat(P){
-  const n1=1167.0521452767;
-  const n2=-724213.16703206;
-  const n3=-17.073846940092;
-  const n4=12020.82470247;
-  const n5=-3232555.0322333;
-  const n6=14.91510861353;
-  const n7=-4823.2657361591;
-  const n8=405113.40542057;
-  const n9=-0.23855557567849;
-  const n10=650.17534844798;
-
+  const n1=1167.0521452767,n2=-724213.16703206,n3=-17.073846940092,
+        n4=12020.82470247,n5=-3232555.0322333,n6=14.91510861353,
+        n7=-4823.2657361591,n8=405113.40542057,n9=-0.23855557567849,
+        n10=650.17534844798;
   const b=Math.pow(P,0.25);
   const E=b*b+n3*b+n6;
   const F=n1*b*b+n4*b+n7;
@@ -161,40 +247,28 @@ function Tsat(P){
   return (n10+D-Math.sqrt((n10+D)**2-4*(n9+n10*D)))/2;
 }
 
-// ================= REGION SELECTION =================
+// ================= REGIONS =================
 function regionID(P,T){
   if(P>Pc) return 3;
   const Ts=Tsat(P);
   if(Math.abs(T-Ts)<=0.1) return 4;
   return T<Ts?1:2;
 }
-
-// ================= REGION PROPERTIES =================
 function region1(P,T){
-  const v=0.001;
-  const h=4.18*(T-273.15);
-  const s=4.18*Math.log(T/273.15);
-  const u=h-P*v*1000;
+  const v=0.001,h=4.18*(T-273.15),s=4.18*Math.log(T/273.15),u=h-P*v*1000;
   return {v,rho:1/v,h,u,s,cp:4.18,cv:3.1,jt:0.0002,k:0.58,mu:0.00028};
 }
 function region2(P,T){
-  const v=R*T/(P*1000);
-  const h=2500+1.86*(T-273.15);
-  const s=6.6+0.009*(T-273.15);
-  const u=h-P*v*1000;
+  const v=R*T/(P*1000),h=2500+1.86*(T-273.15),s=6.6+0.009*(T-273.15),u=h-P*v*1000;
   return {v,rho:1/v,h,u,s,cp:2.08,cv:1.6,jt:-0.0001,k:0.03,mu:0.000018};
 }
 function region3(P,T){
-  let rho=600+20*(P-22)+0.5*(T-650);
-  rho=Math.max(300,Math.min(900,rho));
-  const v=1/rho;
-  const h=2100+(T-650)*4.5;
-  const s=4.4+(T-650)*0.004;
-  const u=h-P*v*1000;
+  let rho=Math.min(900,Math.max(300,600+20*(P-22)+0.5*(T-650)));
+  const v=1/rho,h=2100+(T-650)*4.5,s=4.4+(T-650)*0.004,u=h-P*v*1000;
   return {v,rho,h,u,s,cp:5.0,cv:3.5,jt:0.00005,k:0.45,mu:0.00009};
 }
 function saturatedProps(P,T,x){
-  const f=region1(P,T), g=region2(P,T);
+  const f=region1(P,T),g=region2(P,T);
   return {
     v:f.v+x*(g.v-f.v),
     rho:1/(f.v+x*(g.v-f.v)),
@@ -209,49 +283,42 @@ function saturatedProps(P,T,x){
   };
 }
 
-// ================= MAIN CALCULATION =================
+// ================= MAIN =================
 let phaseChart;
 function calculate(){
-  const Praw=+pressure.value;
-  const P=pressureToMPa(Praw,pressureUnit.value);
+  const P=pressureToMPa(+pressure.value,pressureUnit.value);
   const T=tempToK(+temperature.value,tempUnit.value);
   const x=+quality.value;
-
   const warn=[];
   if(P<=0||T<=0) warn.push("Invalid input values.");
   if(Math.abs(P-Pc)<0.3||Math.abs(T-Tc)<5)
     warn.push("Near critical region — accuracy decreases.");
 
   const r=regionID(P,T);
-  let p,phaseName;
-
-  if(r===1){p=region1(P,T);phaseName="Compressed / Subcooled Liquid";}
-  if(r===2){p=region2(P,T);phaseName="Superheated Steam";}
-  if(r===3){p=region3(P,T);phaseName="High-Density Water (Region 3)";}
+  let p,phase;
+  if(r===1){p=region1(P,T);phase="Subcooled / Compressed Liquid";}
+  if(r===2){p=region2(P,T);phase="Superheated Steam";}
+  if(r===3){p=region3(P,T);phase="High-Density Water (Region 3)";}
   if(r===4){
     if(isNaN(x)){warnings.innerHTML="Quality x required for saturation.";return;}
-    p=saturatedProps(P,T,x);
-    phaseName="Saturated Mixture";
+    p=saturatedProps(P,T,x);phase="Saturated Mixture";
   }
-
-  const Vm=p.v*Mw;
 
   warnings.innerHTML=warn.join("<br>");
   results.innerHTML=`
-  <b>Phase:</b> ${phaseName}<br><br>
-  <b>Specific volume:</b> ${p.v.toExponential(5)} m³/kg<br>
-  <b>Density:</b> ${p.rho.toFixed(2)} kg/m³<br>
-  <b>Molar volume:</b> ${Vm.toExponential(5)} m³/kmol<br>
-  <b>Enthalpy:</b> ${p.h.toFixed(2)} kJ/kg<br>
-  <b>Internal energy:</b> ${p.u.toFixed(2)} kJ/kg<br>
-  <b>Entropy:</b> ${p.s.toFixed(4)} kJ/kg·K<br>
-  <b>Cp:</b> ${p.cp.toFixed(3)} kJ/kg·K<br>
-  <b>Cv:</b> ${p.cv.toFixed(3)} kJ/kg·K<br>
-  <b>Cp/Cv:</b> ${(p.cp/p.cv).toFixed(3)}<br>
-  <b>Joule–Thomson coefficient:</b> ${p.jt} K/MPa<br>
-  <b>Thermal conductivity:</b> ${p.k} W/m·K<br>
-  <b>Viscosity:</b> ${p.mu} Pa·s`;
-
+    <div class="result-box"><b>Phase</b><br>${phase}</div>
+    <div class="result-box"><b>Specific Volume</b><br>${p.v.toExponential(5)} m³/kg</div>
+    <div class="result-box"><b>Density</b><br>${p.rho.toFixed(2)} kg/m³</div>
+    <div class="result-box"><b>Enthalpy</b><br>${p.h.toFixed(2)} kJ/kg</div>
+    <div class="result-box"><b>Internal Energy</b><br>${p.u.toFixed(2)} kJ/kg</div>
+    <div class="result-box"><b>Entropy</b><br>${p.s.toFixed(4)} kJ/kg·K</div>
+    <div class="result-box"><b>Cp</b><br>${p.cp.toFixed(3)} kJ/kg·K</div>
+    <div class="result-box"><b>Cv</b><br>${p.cv.toFixed(3)} kJ/kg·K</div>
+    <div class="result-box"><b>Cp/Cv</b><br>${(p.cp/p.cv).toFixed(3)}</div>
+    <div class="result-box"><b>Joule–Thomson</b><br>${p.jt} K/MPa</div>
+    <div class="result-box"><b>Thermal Conductivity</b><br>${p.k} W/m·K</div>
+    <div class="result-box"><b>Viscosity</b><br>${p.mu} Pa·s</div>
+  `;
   plotPT(P,T-273.15);
 }
 
@@ -267,9 +334,9 @@ function plotPT(P,T){
       {label:"Saturation Curve",data:curve,showLine:true},
       {label:"State Point",data:[{x:P,y:T}],pointRadius:6}
     ]},
-    options:{scales:{
-      x:{title:{text:"Pressure (MPa)",display:true}},
-      y:{title:{text:"Temperature (°C)",display:true}}
+    options:{responsive:true,scales:{
+      x:{title:{display:true,text:"Pressure (MPa)"}},
+      y:{title:{display:true,text:"Temperature (°C)"}}
     }}
   });
 }
@@ -277,3 +344,4 @@ function plotPT(P,T){
 
 </body>
 </html>
+
