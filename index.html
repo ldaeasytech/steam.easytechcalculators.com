@@ -17,30 +17,9 @@
   <pre id="results"></pre>
 
   <script>
-    const API = "https://YOUR-BACKEND.onrender.com/api/water"; // ← REQUIRED
-
-    async function calculate() {
-      const T = document.getElementById("temp").value;
-      const P = document.getElementById("press").value;
-
-      if (!T || !P) {
-        alert("Please enter temperature and pressure");
-        return;
-      }
-
-      try {
-        const r = await fetch(`${API}?T=${T}&P=${P}`);
-        if (!r.ok) throw new Error("API error");
-
-        const data = await r.json();
-        document.getElementById("results").textContent =
-          JSON.stringify(data, null, 2);
-      } catch (e) {
-        document.getElementById("results").textContent =
-          "Error contacting calculation server";
-        console.error(e);
-      }
-    }
+    function calculate() {
+    alert("Calculate button clicked!");
+  }
   </script>
 
 </body>
