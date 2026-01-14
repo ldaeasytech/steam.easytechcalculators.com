@@ -9,7 +9,7 @@
 
 <style>
 body{font-family:Arial;background:#f4f6f8;margin:0}
-header{background:#0b5ed7;color:#fff;padding:26px;text-align:center}
+header{background:#0b5ed7;color:#fff;padding:28px;text-align:center}
 .container{max-width:1100px;margin:25px auto;background:#fff;padding:25px;border-radius:10px}
 .row{display:flex;gap:15px;flex-wrap:wrap}
 .col{flex:1;min-width:220px}
@@ -34,7 +34,7 @@ td{padding:10px;border-bottom:1px solid #ddd}
 <div class="row">
 <div class="col">
 <label>Temperature</label>
-<input id="T" value="100">
+<input id="T" value="150">
 <select id="Tunit"><option>C</option><option>K</option></select>
 </div>
 
@@ -46,7 +46,7 @@ td{padding:10px;border-bottom:1px solid #ddd}
 
 <div class="col">
 <label>Quality x (optional)</label>
-<input id="x" value="">
+<input id="x" placeholder="0–1">
 </div>
 
 <div class="col">
@@ -71,14 +71,14 @@ Validated against Perry’s Chemical Engineers’ Handbook
 </div>
 
 <script>
-/* ---------- Constants ---------- */
+/* ================= CONSTANTS ================= */
 const R = 0.461526;
 
-/* ---------- Units ---------- */
+/* ================= UNIT CONVERSION ================= */
 const toK = (T,u)=>u==="C"?T+273.15:T;
 const toMPa = (P,u)=>u==="bar"?P*0.1:P;
 
-/* ---------- Saturation Pressure ---------- */
+/* ================= SATURATION PRESSURE ================= */
 function Psat(T){
 const n=[1167.0521452767,-724213.16703206,-17.073846940092,
 12020.82470247,-32325550.322333,14.91510861353,
@@ -90,16 +90,25 @@ const C=n[5]*t*t+n[6]*t+n[7];
 return Math.pow(2*C/(-B+Math.sqrt(B*B-4*A*C)),4);
 }
 
-/* ---------- Region 1 (Liquid) ---------- */
+/* ================= INVERSE SATURATION TEMPERATURE ================= */
+function TsatFromP(P){
+let T=373.15;
+for(let i=0;i<25;i++){
+T-= (Psat(T)-P)/0.01;
+}
+return T;
+}
+
+/* ================= LIQUID PROPERTIES ================= */
 function region1(T,P){
 return{
-rho: 958.4 - 0.3*(T-373.15),
-h: 419 + 4.18*(T-373.15),
-s: 1.307 + 0.01*(T-373.15)
+rho: 1000 - 0.3*(T-273.15),
+h: 4.18*(T-273.15),
+s: 1.0 + 0.01*(T-273.15)
 };
 }
 
-/* ---------- Region 2 (Vapor) ---------- */
+/* ================= VAPOR PROPERTIES ================= */
 function region2(T,P){
 return{
 rho: P*1e6/(461.526*T),
@@ -108,77 +117,64 @@ s: 7.354 + 0.01*(T-373.15)
 };
 }
 
-/* ---------- Transport ---------- */
+/* ================= TRANSPORT ================= */
 function viscosity(T,rho){
-return rho > 500 ? 0.00028 : 1.3e-5;
+return rho>100?0.00028:1.3e-5;
 }
 function conductivity(T,rho){
-return rho > 500 ? 0.68 : 0.03;
+return rho>100?0.68:0.03;
 }
 
-/* ---------- Main ---------- */
+/* ================= MAIN CALCULATION ================= */
 function calculate(){
-  const TK = toK(+T.value, Tunit.value);
-  const PM = toMPa(+P.value, Punit.value);
-  const Ps = Psat(TK);           // saturation pressure at T
-  const xVal = parseFloat(x.value);
+const TK=toK(+T.value,Tunit.value);
+const PM=toMPa(+P.value,Punit.value);
+const Tsat=TsatFromP(PM);
+const xVal=parseFloat(x.value);
 
-  let props, stateName;
+let props,stateName;
 
-  // --- Check saturation using temperature ---
-  const Tsat = (() => {
-    // simple inverse saturation (Newton iteration)
-    let Tguess = 373.15;
-    for(let i=0;i<20;i++){
-      const f = Psat(Tguess) - PM;
-      Tguess -= f / 0.01;
-    }
-    return Tguess;
-  })();
+// ----- Saturated region -----
+if(Math.abs(TK-Tsat)<0.5 && !isNaN(xVal)){
+if(xVal<=0){
+props=region1(Tsat,PM);
+stateName="Saturated Liquid";
+}
+else if(xVal>=1){
+props=region2(Tsat,PM);
+stateName="Saturated Vapor";
+}
+else{
+const f=region1(Tsat,PM);
+const g=region2(Tsat,PM);
+props={
+rho:1/((1-xVal)/f.rho+xVal/g.rho),
+h:(1-xVal)*f.h+xVal*g.h,
+s:(1-xVal)*f.s+xVal*g.s
+};
+stateName="Two-Phase Mixture";
+}
+}
 
-  const dT = TK - Tsat;
+// ----- Subcooled liquid -----
+else if(TK<Tsat){
+props=region1(TK,PM);
+stateName="Subcooled / Compressed Liquid";
+}
 
-  // --- Saturated region ---
-  if (Math.abs(dT) < 0.5 && !isNaN(xVal)){
-    if (xVal <= 0){
-      props = region1(Tsat, PM);
-      stateName = "Saturated Liquid";
-    }
-    else if (xVal >= 1){
-      props = region2(Tsat, PM);
-      stateName = "Saturated Vapor";
-    }
-    else{
-      const f = region1(Tsat, PM);
-      const g = region2(Tsat, PM);
-      props = {
-        rho: 1 / ((1-xVal)/f.rho + xVal/g.rho),
-        h: (1-xVal)*f.h + xVal*g.h,
-        s: (1-xVal)*f.s + xVal*g.s
-      };
-      stateName = "Two-Phase Mixture";
-    }
-  }
+// ----- Superheated steam -----
+else{
+props=region2(TK,PM);
+stateName="Superheated Steam";
+}
 
-  // --- Subcooled liquid ---
-  else if (TK < Tsat){
-    props = region1(TK, PM);
-    stateName = "Subcooled / Compressed Liquid";
-  }
-
-  // --- Superheated steam ---
-  else{
-    props = region2(TK, PM);
-    stateName = "Superheated Steam";
-  }
-
-  document.getElementById("state").textContent = stateName;
-  document.getElementById("rho").textContent = props.rho.toFixed(3)+" kg/m³";
-  document.getElementById("v").textContent = (1/props.rho).toExponential(6)+" m³/kg";
-  document.getElementById("h").textContent = props.h.toFixed(2)+" kJ/kg";
-  document.getElementById("s").textContent = props.s.toFixed(4)+" kJ/kg·K";
-  document.getElementById("mu").textContent = viscosity(TK,props.rho)+" Pa·s";
-  document.getElementById("k").textContent = conductivity(TK,props.rho)+" W/m·K";
+document.getElementById("state").textContent=stateName;
+document.getElementById("rho").textContent=props.rho.toFixed(3)+" kg/m³";
+document.getElementById("v").textContent=(1/props.rho).toExponential(6)+" m³/kg";
+document.getElementById("h").textContent=props.h.toFixed(2)+" kJ/kg";
+document.getElementById("s").textContent=props.s.toFixed(4)+" kJ/kg·K";
+document.getElementById("mu").textContent=viscosity(TK,props.rho)+" Pa·s";
+document.getElementById("k").textContent=conductivity(TK,props.rho)+" W/m·K";
 }
 </script>
 </body>
