@@ -17,8 +17,25 @@
   <pre id="results"></pre>
 
   <script>
-    function calculate() {
-    alert("Calculate button clicked!");
+    async function calculate() {
+    console.log("Clicked");
+
+    const url = "https://YOUR-BACKEND-URL/api/water?T=300&P=10";
+    console.log("Calling:", url);
+
+    try {
+      const r = await fetch(url);
+      console.log("Response status:", r.status);
+
+      const text = await r.text();
+      console.log("Raw response:", text);
+
+      document.getElementById("results").textContent = text;
+    } catch (e) {
+      console.error("Fetch failed:", e);
+      document.getElementById("results").textContent =
+        "FETCH FAILED — see console";
+    }
   }
   </script>
 
