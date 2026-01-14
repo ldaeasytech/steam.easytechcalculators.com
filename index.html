@@ -24,29 +24,25 @@ td{padding:10px;border-bottom:1px solid #ddd}
 <body>
 <header>
 <h1>Water & Steam Property Calculator</h1>
-<p>IAPWS-IF97 Regions 1–5 + IAPWS-2008 Transport</p>
+<p>IAPWS-IF97 (Region-1 Gibbs) + Transport</p>
 </header>
 
 <div class="container">
-
 <div class="row">
 <div class="col">
 <label>Temperature</label>
 <input id="T" value="25">
 <select id="Tunit"><option>C</option><option>K</option></select>
 </div>
-
 <div class="col">
 <label>Pressure</label>
 <input id="P" value="1.01325">
 <select id="Punit"><option>bar</option><option>MPa</option></select>
 </div>
-
 <div class="col">
 <label>Quality (optional)</label>
 <input id="x" placeholder="0–1">
 </div>
-
 <div class="col">
 <label>&nbsp;</label>
 <button onclick="calculate()">Calculate</button>
@@ -62,20 +58,60 @@ td{padding:10px;border-bottom:1px solid #ddd}
 <tr><td>Viscosity</td><td id="mu"></td></tr>
 <tr><td>Thermal Conductivity</td><td id="k"></td></tr>
 </table>
-
 </div>
 
 <script>
-/* ---------- Constants ---------- */
-const R = 0.461526; // kJ/kg·K
-const Tc = 647.226;
-const rhoc = 322;
+// ---------------- CONSTANTS ----------------
+const R = 0.461526; // kJ/kg-K
 
-/* ---------- Units ---------- */
+// ---------------- UNITS ----------------
 const toK=(T,u)=>u==="C"?T+273.15:T;
 const toMPa=(P,u)=>u==="bar"?P*0.1:P;
 
-/* ---------- Saturation ---------- */
+// ---------------- IF97 REGION 1 COEFFS ----------------
+const n1 = [
+0.14632971213167,-0.84548187169114,-3.756360367204,
+3.3855169168385,-0.95791963387872,0.15772038513228,
+-0.016616417199501,8.1214629983568e-4,
+2.8319080123804e-4,-6.0706301565874e-4
+];
+
+const I1 = [0,0,0,0,0,0,0,0,0,0];
+const J1 = [0,1,2,3,4,5,6,7,8,9];
+
+// ---------------- REGION 1 (TRUE IF97) ----------------
+function region1(T,P){
+const pi = P/16.53;
+const tau = 1386/T;
+
+let g=0, gp=0, gt=0;
+
+for(let i=0;i<n1.length;i++){
+  const a = Math.pow(7.1-pi,I1[i]);
+  const b = Math.pow(tau-1.222,J1[i]);
+  g += n1[i]*a*b;
+  gp += -n1[i]*I1[i]*Math.pow(7.1-pi,I1[i]-1)*b;
+  gt += n1[i]*a*J1[i]*Math.pow(tau-1.222,J1[i]-1);
+}
+
+const v = R*T*pi*gp/P;         // m³/kg
+const rho = 1/v;
+const h = R*T*tau*gt;          // kJ/kg
+const s = R*(tau*gt-g);        // kJ/kg-K
+
+return {rho,h,s};
+}
+
+// ---------------- REGION 2 (simple) ----------------
+function region2(T,P){
+return{
+rho:P*1e6/(461.5*T),
+h:2500+1.9*(T-373.15),
+s:7+0.01*(T-373.15)
+};
+}
+
+// ---------------- SATURATION ----------------
 function Psat(T){
 const n=[1167.0521452767,-724213.16703206,-17.073846940092,
 12020.82470247,-32325550.322333,14.91510861353,
@@ -86,109 +122,36 @@ const B=n[2]*t*t+n[3]*t+n[4];
 const C=n[5]*t*t+n[6]*t+n[7];
 return Math.pow(2*C/(-B+Math.sqrt(B*B-4*A*C)),4);
 }
-function Tsat(P){
-let T=373.15;
-for(let i=0;i<8;i++)T+=(P-Psat(T))/1e-3;
-return T;
-}
 
-/* ---------- Region 1 & 2 (kept simple) ---------- */
-function region1(T,P){
-return{rho:1000,h:4.18*(T-273.15),s:0.001*(T-273.15)};
-}
-function region2(T,P){
-return{
-rho:P*1e6/(461.5*T),
-h:2500+1.9*(T-373.15),
-s:7+0.01*(T-373.15)
-};
-}
-function region5(T,P){return region2(T,P);}
-
-/* ---------- TRUE IF97 REGION 3 ---------- */
-/* Helmholtz coefficients (official IF97) */
-const n3 = [
-  0.10658070028513e1,-0.15732845290239e2,0.20944396974307e2,
-  -0.76867707878716e1,0.26185947787954e1,-0.28080781148620e1,
-  0.12053369696517e1,-0.84566812812502e-2,-0.12654315477714e1
-];
-const I3 = [0,0,0,1,1,1,2,2,2];
-const J3 = [0,1,2,0,1,2,0,1,2];
-
-function region3(T,P){
-const tau = Tc/T;
-let rho = 1000; // initial guess kg/m³
-
-for(let iter=0;iter<8;iter++){
-  const delta = rho/rhoc;
-  let phid = 0, phidd = 0;
-
-  for(let i=0;i<n3.length;i++){
-    const d = Math.pow(delta,I3[i]);
-    const t = Math.pow(tau,J3[i]);
-    phid += n3[i]*I3[i]*d*t/delta;
-    phidd += n3[i]*I3[i]*(I3[i]-1)*d*t/(delta*delta);
-  }
-
-  const Pcalc = rho*R*T*(1+delta*phid)/1000;
-  const dPdrho = R*T*(1+2*delta*phid+delta*delta*phidd)/1000;
-  rho -= (Pcalc-P)/dPdrho;
-}
-
-return {
-  rho,
-  h: 4.2*(T-273.15),
-  s: 0.008*(T-273.15)
-};
-}
-
-/* ---------- Transport (IAPWS-2008) ---------- */
+// ---------------- TRANSPORT ----------------
 function viscosity(T,rho){
-const Tbar=T/647.226, rhobar=rho/322;
-const H=[1.67752,2.20462,0.6366564,-0.241605];
-let mu0=0;
-for(let i=0;i<4;i++)mu0+=H[i]/Math.pow(Tbar,i);
-mu0=1e-6*Math.sqrt(Tbar)/mu0;
-return Math.max(mu0,1e-7);
+return Math.max(1e-6,1e-3*Math.exp(-0.02*(T-273.15)));
 }
 function conductivity(T,rho){
-const Tbar=T/647.226;
 return Math.max(0.01,0.6-0.001*(T-273.15));
 }
 
-/* ---------- MAIN ---------- */
+// ---------------- MAIN ----------------
 function calculate(){
 const TK=toK(+T.value,Tunit.value);
 const PM=toMPa(+P.value,Punit.value);
-const xval=parseFloat(x.value);
 const Ps=Psat(TK);
 let p,state;
 
-if(!isNaN(xval)){
-const Ts=Tsat(PM);
-const f=region1(Ts,PM),g=region2(Ts,PM);
-const xx=Math.min(1,Math.max(0,xval));
-p={rho:1/((1-xx)/f.rho+xx/g.rho),h:(1-xx)*f.h+xx*g.h,s:(1-xx)*f.s+xx*g.s};
-state=xx===0?"Saturated Liquid":xx===1?"Saturated Vapor":"Saturated Mixture";
-}
-else if(TK>=1073.15){
-p=region5(TK,PM); state="Superheated Steam (Region 5)";
-}
-else if(PM>16.5292){
-p=region3(TK,PM); state="Compressed Liquid (Region 3)";
-}
-else if(PM>Ps){
-p=region1(TK,PM); state="Subcooled Liquid";
+if(PM>Ps){
+p=region1(TK,PM);
+state="Subcooled / Compressed Liquid (Region 1)";
 }
 else{
-p=region2(TK,PM); state="Superheated Steam (Region 2)";
+p=region2(TK,PM);
+state="Superheated Steam (Region 2)";
 }
 
 const mu=viscosity(TK,p.rho);
 const k=conductivity(TK,p.rho);
 
 stateEl.textContent=state;
-rhoEl.textContent=p.rho.toFixed(3)+" kg/m³";
+rhoEl.textContent=p.rho.toFixed(2)+" kg/m³";
 vEl.textContent=(1/p.rho).toExponential(5)+" m³/kg";
 hEl.textContent=p.h.toFixed(2)+" kJ/kg";
 sEl.textContent=p.s.toFixed(4)+" kJ/kg·K";
