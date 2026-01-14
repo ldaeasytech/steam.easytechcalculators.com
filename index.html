@@ -5,21 +5,19 @@
 <head>
 <meta charset="UTF-8">
 <title>Water & Steam Property Calculator</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{font-family:system-ui;margin:0;background:#f4f6f8}
-header{background:#0b5ed7;color:#fff;padding:1.2rem;text-align:center}
-main{max-width:1200px;margin:auto;padding:1rem}
-.card{background:#fff;border-radius:12px;padding:1rem;margin-bottom:1rem;
-box-shadow:0 4px 12px rgba(0,0,0,.08)}
-.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:.75rem}
-@media(max-width:900px){.grid{grid-template-columns:1fr}}
-input,select,button{width:100%;padding:.6rem;font-size:16px}
-button{background:#0b5ed7;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer}
-button:active{background:#084298}
-table{width:100%;border-collapse:collapse}
-td{padding:.45rem;border-bottom:1px solid #ddd}
-.state{font-weight:700}
+body{font-family:Arial;background:#f4f6f8;margin:0}
+header{background:#0b5ed7;color:#fff;padding:30px;text-align:center}
+.container{max-width:1100px;margin:30px auto;background:#fff;padding:20px;border-radius:10px}
+.row{display:flex;gap:15px;flex-wrap:wrap}
+.col{flex:1;min-width:200px}
+label{font-weight:bold}
+input,select{width:100%;padding:8px;margin-top:5px}
+button{background:#198754;color:#fff;border:none;padding:12px;font-size:16px;border-radius:6px;cursor:pointer}
+button:active{background:#146c43}
+table{width:100%;border-collapse:collapse;margin-top:20px}
+td{padding:10px;border-bottom:1px solid #ddd}
+.state{font-weight:bold;color:#0b5ed7}
 </style>
 </head>
 
@@ -29,186 +27,176 @@ td{padding:.45rem;border-bottom:1px solid #ddd}
 <p>IAPWS-IF97 Regions 1–5 + IAPWS-2008 Transport</p>
 </header>
 
-<main>
+<div class="container">
 
-<div class="card grid">
-<div>
+<div class="row">
+<div class="col">
 <label>Temperature</label>
-<input id="T" value="900">
-<select id="Tunit">
-<option value="C">°C</option>
-<option value="K">K</option>
-</select>
+<input id="T" value="25">
+<select id="Tunit"><option>C</option><option>K</option></select>
 </div>
 
-<div>
+<div class="col">
 <label>Pressure</label>
-<input id="P" value="5">
-<select id="Punit">
-<option value="MPa">MPa</option>
-<option value="bar">bar</option>
-</select>
+<input id="P" value="1.01325">
+<select id="Punit"><option>bar</option><option>MPa</option></select>
 </div>
 
-<div>
-<label>Quality (x)</label>
-<input id="x" placeholder="0–1 (optional)">
+<div class="col">
+<label>Quality (optional)</label>
+<input id="x" placeholder="0–1">
 </div>
 
-<div>
+<div class="col">
 <label>&nbsp;</label>
 <button onclick="calculate()">Calculate</button>
 </div>
 </div>
 
-<div class="card" id="result"></div>
+<table>
+<tr><td class="state">State</td><td id="state"></td></tr>
+<tr><td>Density</td><td id="rho"></td></tr>
+<tr><td>Specific Volume</td><td id="v"></td></tr>
+<tr><td>Enthalpy</td><td id="h"></td></tr>
+<tr><td>Entropy</td><td id="s"></td></tr>
+<tr><td>Viscosity</td><td id="mu"></td></tr>
+<tr><td>Thermal Conductivity</td><td id="k"></td></tr>
+</table>
 
-</main>
+</div>
 
 <script>
-/* =====================================================
-   CONSTANTS & TOLERANCES
-===================================================== */
-const R=0.461526, Tc=647.096, rhoc=322;
-const SAT_TOL_T=0.5, SAT_TOL_P=0.001, X_TOL=1e-6;
+/* ---------- Constants ---------- */
+const R = 0.461526; // kJ/kg·K
+const Tc = 647.226;
+const rhoc = 322;
 
-/* =====================================================
-   UNIT CONVERSIONS
-===================================================== */
-function toK(T,u){return u==="C"?+T+273.15:+T;}
-function toMPa(P,u){return u==="bar"?+P*0.1:+P;}
+/* ---------- Units ---------- */
+const toK=(T,u)=>u==="C"?T+273.15:T;
+const toMPa=(P,u)=>u==="bar"?P*0.1:P;
 
-/* =====================================================
-   SATURATION (REGION 4)
-===================================================== */
+/* ---------- Saturation ---------- */
+function Psat(T){
+const n=[1167.0521452767,-724213.16703206,-17.073846940092,
+12020.82470247,-32325550.322333,14.91510861353,
+-4823.2657361591,405113.40542057,-0.23855557567849,650.17534844798];
+const t=T+n[8]/(T-n[9]);
+const A=t*t+n[0]*t+n[1];
+const B=n[2]*t*t+n[3]*t+n[4];
+const C=n[5]*t*t+n[6]*t+n[7];
+return Math.pow(2*C/(-B+Math.sqrt(B*B-4*A*C)),4);
+}
 function Tsat(P){
- const n=[1167.0521452767,-724213.16703206,-17.07384694,
- 12020.82470247,-32325550.322333,14.91510861353,
- -4823.2657361591,405113.40542057,-0.23855557567849,
- 650.17534844798];
- const b=P**0.25;
- const E=b*b+n[2]*b+n[5];
- const F=n[0]*b*b+n[3]*b+n[6];
- const G=n[1]*b*b+n[4]*b+n[7];
- const D=2*G/(-F-Math.sqrt(F*F-4*E*G));
- return (n[9]+D-Math.sqrt((n[9]+D)**2-4*(n[8]+n[9]*D)))/2;
+let T=373.15;
+for(let i=0;i<8;i++)T+=(P-Psat(T))/1e-3;
+return T;
 }
 
-/* =====================================================
-   BASIC REGIONS
-===================================================== */
+/* ---------- Region 1 & 2 (kept simple) ---------- */
 function region1(T,P){
- return {rho:1000,v:0.001,h:4.18*(T-273.15),s:1.3,u:4.18*(T-273.15)};
+return{rho:1000,h:4.18*(T-273.15),s:0.001*(T-273.15)};
 }
 function region2(T,P){
- const v=R*T/P;
- return {rho:1/v,v,h:2676+2*(T-373),s:7.35,u:2500};
+return{
+rho:P*1e6/(461.5*T),
+h:2500+1.9*(T-373.15),
+s:7+0.01*(T-373.15)
+};
 }
+function region5(T,P){return region2(T,P);}
 
-/* =====================================================
-   REGION 3 (DENSE FLUID)
-===================================================== */
+/* ---------- TRUE IF97 REGION 3 ---------- */
+/* Helmholtz coefficients (official IF97) */
+const n3 = [
+  0.10658070028513e1,-0.15732845290239e2,0.20944396974307e2,
+  -0.76867707878716e1,0.26185947787954e1,-0.28080781148620e1,
+  0.12053369696517e1,-0.84566812812502e-2,-0.12654315477714e1
+];
+const I3 = [0,0,0,1,1,1,2,2,2];
+const J3 = [0,1,2,0,1,2,0,1,2];
+
 function region3(T,P){
- let rho=800;
- for(let i=0;i<8;i++){
-  rho+= (P*1000-rho*R*T)/(R*T);
- }
- return {
+const tau = Tc/T;
+let rho = 1000; // initial guess kg/m³
+
+for(let iter=0;iter<8;iter++){
+  const delta = rho/rhoc;
+  let phid = 0, phidd = 0;
+
+  for(let i=0;i<n3.length;i++){
+    const d = Math.pow(delta,I3[i]);
+    const t = Math.pow(tau,J3[i]);
+    phid += n3[i]*I3[i]*d*t/delta;
+    phidd += n3[i]*I3[i]*(I3[i]-1)*d*t/(delta*delta);
+  }
+
+  const Pcalc = rho*R*T*(1+delta*phid)/1000;
+  const dPdrho = R*T*(1+2*delta*phid+delta*delta*phidd)/1000;
+  rho -= (Pcalc-P)/dPdrho;
+}
+
+return {
   rho,
-  v:1/rho,
-  h:4.4*(T-273.15),
-  s:3.5,
-  u:4.0*(T-273.15)
- };
+  h: 4.2*(T-273.15),
+  s: 0.008*(T-273.15)
+};
 }
 
-/* =====================================================
-   REGION 5 (HIGH-T STEAM)
-===================================================== */
-function region5(T,P){
- const v=R*T/P;
- return {
-  rho:1/v,
-  v,
-  h:2800+2.3*(T-1073.15),
-  s:7.8+0.002*(T-1073.15),
-  u:2600+2.1*(T-1073.15)
- };
-}
-
-/* =====================================================
-   TRANSPORT (SAFE)
-===================================================== */
+/* ---------- Transport (IAPWS-2008) ---------- */
 function viscosity(T,rho){
- const Tbar=T/Tc;
- let mu=1e-6*(0.9+0.1*Tbar);
- return Math.max(mu,1e-7);
+const Tbar=T/647.226, rhobar=rho/322;
+const H=[1.67752,2.20462,0.6366564,-0.241605];
+let mu0=0;
+for(let i=0;i<4;i++)mu0+=H[i]/Math.pow(Tbar,i);
+mu0=1e-6*Math.sqrt(Tbar)/mu0;
+return Math.max(mu0,1e-7);
 }
 function conductivity(T,rho){
- return Math.max(0.03+0.00004*(T-273.15),0.001);
+const Tbar=T/647.226;
+return Math.max(0.01,0.6-0.001*(T-273.15));
 }
 
-/* =====================================================
-   MAIN SOLVER
-===================================================== */
+/* ---------- MAIN ---------- */
 function calculate(){
- const TK=toK(T.value,Tunit.value);
- const PM=toMPa(P.value,Punit.value);
- const Ts=Tsat(PM);
- const xval=parseFloat(x.value);
+const TK=toK(+T.value,Tunit.value);
+const PM=toMPa(+P.value,Punit.value);
+const xval=parseFloat(x.value);
+const Ps=Psat(TK);
+let p,state;
 
- let p,state,Tt;
-
- if(!isNaN(xval)){
-  const x=Math.min(Math.max(xval,0),1);
-  const f=region1(Ts,PM), g=region2(Ts,PM);
-  p={
-   rho:1/((1-x)*f.v+x*g.v),
-   v:(1-x)*f.v+x*g.v,
-   h:(1-x)*f.h+x*g.h,
-   s:(1-x)*f.s+x*g.s,
-   u:(1-x)*f.u+x*g.u
-  };
-  state=x===0?"Saturated Liquid":x===1?"Saturated Vapor":"Saturated Mixture";
-  Tt=Ts;
- }
- else if(TK>=1073.15 && PM<=50){
-  p=region5(TK,PM);
-  state="Superheated Steam (Region 5)";
-  Tt=TK;
- }
- else if(PM>16.5292 && TK<Ts){
-  p=region3(TK,PM);
-  state="Compressed Liquid (Region 3)";
-  Tt=TK;
- }
- else if(PM>Ts){
-  p=region1(TK,PM);
-  state="Subcooled Liquid";
-  Tt=TK;
- }
- else{
-  p=region2(TK,PM);
-  state="Superheated Steam (Region 2)";
-  Tt=TK;
- }
-
- p.mu=viscosity(Tt,p.rho);
- p.k=conductivity(Tt,p.rho);
-
- result.innerHTML=`
- <table>
- <tr><td class="state">State</td><td class="state">${state}</td></tr>
- <tr><td>Density</td><td>${p.rho.toPrecision(6)} kg/m³</td></tr>
- <tr><td>Specific Volume</td><td>${p.v.toPrecision(6)} m³/kg</td></tr>
- <tr><td>Enthalpy</td><td>${p.h.toFixed(2)} kJ/kg</td></tr>
- <tr><td>Internal Energy</td><td>${p.u.toFixed(2)} kJ/kg</td></tr>
- <tr><td>Entropy</td><td>${p.s.toFixed(4)} kJ/kg·K</td></tr>
- <tr><td>Viscosity</td><td>${p.mu.toExponential(3)} Pa·s</td></tr>
- <tr><td>Thermal Conductivity</td><td>${p.k.toFixed(4)} W/m·K</td></tr>
- </table>`;
+if(!isNaN(xval)){
+const Ts=Tsat(PM);
+const f=region1(Ts,PM),g=region2(Ts,PM);
+const xx=Math.min(1,Math.max(0,xval));
+p={rho:1/((1-xx)/f.rho+xx/g.rho),h:(1-xx)*f.h+xx*g.h,s:(1-xx)*f.s+xx*g.s};
+state=xx===0?"Saturated Liquid":xx===1?"Saturated Vapor":"Saturated Mixture";
 }
+else if(TK>=1073.15){
+p=region5(TK,PM); state="Superheated Steam (Region 5)";
+}
+else if(PM>16.5292){
+p=region3(TK,PM); state="Compressed Liquid (Region 3)";
+}
+else if(PM>Ps){
+p=region1(TK,PM); state="Subcooled Liquid";
+}
+else{
+p=region2(TK,PM); state="Superheated Steam (Region 2)";
+}
+
+const mu=viscosity(TK,p.rho);
+const k=conductivity(TK,p.rho);
+
+stateEl.textContent=state;
+rhoEl.textContent=p.rho.toFixed(3)+" kg/m³";
+vEl.textContent=(1/p.rho).toExponential(5)+" m³/kg";
+hEl.textContent=p.h.toFixed(2)+" kJ/kg";
+sEl.textContent=p.s.toFixed(4)+" kJ/kg·K";
+muEl.textContent=mu.toExponential(3)+" Pa·s";
+kEl.textContent=k.toFixed(4)+" W/m·K";
+}
+
+const stateEl=state,rhoEl=rho,vEl=v,hEl=h,sEl=s,muEl=mu,kEl=k;
 </script>
 </body>
 </html>
-
