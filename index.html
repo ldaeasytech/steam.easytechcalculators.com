@@ -118,39 +118,67 @@ return rho > 500 ? 0.68 : 0.03;
 
 /* ---------- Main ---------- */
 function calculate(){
-const TK = toK(+T.value, Tunit.value);
-const PM = toMPa(+P.value, Punit.value);
-const Ps = Psat(TK);
-const xVal = parseFloat(x.value);
+  const TK = toK(+T.value, Tunit.value);
+  const PM = toMPa(+P.value, Punit.value);
+  const Ps = Psat(TK);           // saturation pressure at T
+  const xVal = parseFloat(x.value);
 
-let props, stateName;
+  let props, stateName;
 
-if (!isNaN(xVal) && xVal > 0 && xVal < 1){
-const f = region1(TK, Ps);
-const g = region2(TK, Ps);
-props = {
-rho: 1 / ((1-xVal)/f.rho + xVal/g.rho),
-h: (1-xVal)*f.h + xVal*g.h,
-s: (1-xVal)*f.s + xVal*g.s
-};
-stateName = "Two-Phase Mixture";
-}
-else if (PM >= Ps){
-props = region1(TK, PM);
-stateName = PM === Ps ? "Saturated Liquid" : "Subcooled Liquid";
-}
-else{
-props = region2(TK, PM);
-stateName = "Superheated Steam";
-}
+  // --- Check saturation using temperature ---
+  const Tsat = (() => {
+    // simple inverse saturation (Newton iteration)
+    let Tguess = 373.15;
+    for(let i=0;i<20;i++){
+      const f = Psat(Tguess) - PM;
+      Tguess -= f / 0.01;
+    }
+    return Tguess;
+  })();
 
-document.getElementById("state").textContent = stateName;
-document.getElementById("rho").textContent = props.rho.toFixed(3)+" kg/m³";
-document.getElementById("v").textContent = (1/props.rho).toExponential(6)+" m³/kg";
-document.getElementById("h").textContent = props.h.toFixed(2)+" kJ/kg";
-document.getElementById("s").textContent = props.s.toFixed(4)+" kJ/kg·K";
-document.getElementById("mu").textContent = viscosity(TK,props.rho)+" Pa·s";
-document.getElementById("k").textContent = conductivity(TK,props.rho)+" W/m·K";
+  const dT = TK - Tsat;
+
+  // --- Saturated region ---
+  if (Math.abs(dT) < 0.5 && !isNaN(xVal)){
+    if (xVal <= 0){
+      props = region1(Tsat, PM);
+      stateName = "Saturated Liquid";
+    }
+    else if (xVal >= 1){
+      props = region2(Tsat, PM);
+      stateName = "Saturated Vapor";
+    }
+    else{
+      const f = region1(Tsat, PM);
+      const g = region2(Tsat, PM);
+      props = {
+        rho: 1 / ((1-xVal)/f.rho + xVal/g.rho),
+        h: (1-xVal)*f.h + xVal*g.h,
+        s: (1-xVal)*f.s + xVal*g.s
+      };
+      stateName = "Two-Phase Mixture";
+    }
+  }
+
+  // --- Subcooled liquid ---
+  else if (TK < Tsat){
+    props = region1(TK, PM);
+    stateName = "Subcooled / Compressed Liquid";
+  }
+
+  // --- Superheated steam ---
+  else{
+    props = region2(TK, PM);
+    stateName = "Superheated Steam";
+  }
+
+  document.getElementById("state").textContent = stateName;
+  document.getElementById("rho").textContent = props.rho.toFixed(3)+" kg/m³";
+  document.getElementById("v").textContent = (1/props.rho).toExponential(6)+" m³/kg";
+  document.getElementById("h").textContent = props.h.toFixed(2)+" kJ/kg";
+  document.getElementById("s").textContent = props.s.toFixed(4)+" kJ/kg·K";
+  document.getElementById("mu").textContent = viscosity(TK,props.rho)+" Pa·s";
+  document.getElementById("k").textContent = conductivity(TK,props.rho)+" W/m·K";
 }
 </script>
 </body>
