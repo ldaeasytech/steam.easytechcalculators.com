@@ -3,60 +3,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
   <title>Water & Steam Property Calculator</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    label { display: block; margin-top: 10px; }
-    input { width: 100%; padding: 8px; margin-top: 4px; }
-    button { margin-top: 15px; padding: 10px 20px; font-size: 16px; }
-    pre { background: #f4f4f4; padding: 10px; }
-  </style>
 </head>
+
 <body>
-  <h1>Water & Steam Property Calculator</h1>
-  <p>Based on IAPWS-IF97 with transport properties</p>
 
-  <label>
-    Temperature
-    <input type="number" id="temp" placeholder="°C" />
-  </label>
-
-  <label>
-    Pressure
-    <input type="number" id="press" placeholder="MPa" />
-  </label>
-
+  <!-- your HTML inputs here -->
+  <input id="temp" type="number" placeholder="Temperature (°C)">
+  <input id="press" type="number" placeholder="Pressure (MPa)">
   <button onclick="calculate()">Calculate</button>
 
-  <h2>Results</h2>
-  <pre id="results">Enter values and click "Calculate".</pre>
+  <pre id="results"></pre>
+
 
   <script>
     async function calculate() {
       const T = document.getElementById("temp").value;
       const P = document.getElementById("press").value;
-      const out = document.getElementById("results");
 
-      if (!T || !P) {
-        out.textContent = "Please enter both T and P.";
-        return;
-      }
+      const r = await fetch(`/api/water?T=${T}&P=${P}`);
+      const data = await r.json();
 
-      try {
-        const resp = await fetch(`/api/water?T=${T}&P=${P}`);
-        const data = await resp.json();
-        out.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        out.textContent = "Error contacting backend API.";
-      }
+      document.getElementById("results").textContent =
+        JSON.stringify(data, null, 2);
     }
   </script>
 
 </body>
 </html>
 
-
-</body>
-</html>
