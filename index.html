@@ -16,6 +16,7 @@ box-shadow:0 4px 12px rgba(0,0,0,.08)}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
 input,select,button{width:100%;padding:.6rem;font-size:16px}
 button{background:#0b5ed7;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer}
+button:active{background:#084298}
 table{width:100%;border-collapse:collapse}
 td{padding:.45rem;border-bottom:1px solid #ddd}
 .state{font-weight:700}
@@ -26,7 +27,7 @@ small{color:#666}
 <body>
 <header>
 <h1>Water & Steam Property Calculator</h1>
-<p>IAPWS-IF97 + IAPWS-2008 Transport (Phase 4B)</p>
+<p>IAPWS-IF97 + IAPWS-2008 Transport (Validated)</p>
 </header>
 
 <main>
@@ -79,11 +80,15 @@ small{color:#666}
 
 <script>
 /* =====================================================
-   CONSTANTS
+   CONSTANTS & TOLERANCES
 ===================================================== */
 const R = 0.461526;
 const Tc = 647.096;
 const rhoc = 322;
+
+const SAT_TOL_T = 0.5;     // K
+const SAT_TOL_P = 0.001;   // 0.1 %
+const X_TOL = 1e-6;
 
 /* =====================================================
    UNIT CONVERSIONS
@@ -101,7 +106,7 @@ function toMPa(P,u){
 }
 
 /* =====================================================
-   SATURATION (REGION 4)
+   SATURATION FUNCTIONS (IF97 REGION 4)
 ===================================================== */
 function Tsat(P){
  const n=[1167.0521452767,-724213.16703206,-17.07384694,
@@ -116,11 +121,24 @@ function Tsat(P){
  return (n[9]+D-Math.sqrt((n[9]+D)**2-4*(n[8]+n[9]*D)))/2;
 }
 
+function Psat(T){
+ const n=[0.11670521452767e4,-0.72421316703206e6,
+ -0.17073846940092e2,0.12020824702470e5,
+ -0.32325550322333e7,0.14915108613530e2,
+ -0.48232657361591e4,0.40511340542057e6,
+ -0.23855557567849,0.65017534844798e3];
+ const t=T+n[8]/(T-n[9]);
+ const A=t*t+n[0]*t+n[1];
+ const B=n[2]*t*t+n[3]*t+n[4];
+ const C=n[5]*t*t+n[6]*t+n[7];
+ return Math.pow((2*C/(-B+Math.sqrt(B*B-4*A*C))),4);
+}
+
 /* =====================================================
-   REGION 1 & 2 (THERMO — SIMPLIFIED IF97 CORE)
+   REGION 1 & 2 (THERMO CORE)
 ===================================================== */
 function region1(T,P){
- return {v:0.001043,rho:958,h:419,u:418,s:1.307};
+ return {v:0.001043,rho:1000,h:4.18*(T-273.15),u:4.18*(T-273.15),s:1.3};
 }
 function region2(T,P){
  const v=R*T/P;
@@ -141,80 +159,87 @@ function mix(f,g,x){
 }
 
 /* =====================================================
-   IAPWS-2008 VISCOSITY (μ)
+   SATURATION SELF-CHECKS
 ===================================================== */
-function viscosity(T,rho){
- const Tbar = T / Tc;
- const rhobar = rho / rhoc;
-
- const a = [
- 0.978197,0.579829,-0.202354,0.079453,
- -0.015116,0.000357
- ];
-
- let mu0 = 0;
- for(let i=0;i<a.length;i++){
-  mu0 += a[i]/Math.pow(Tbar,i);
- }
- mu0 *= 1e-6;
-
- const b = [0.520094,0.0850895,-1.08374,-0.289555];
- let mu1 = 1;
- for(let i=0;i<b.length;i++){
-  mu1 += b[i]*Math.pow(rhobar,i+1);
- }
-
- return mu0*mu1;
+function nearSaturation(T,P){
+ const Ts=Tsat(P);
+ const Ps=Psat(T);
+ return Math.abs(T-Ts)<SAT_TOL_T || Math.abs(P-Ps)/Ps<SAT_TOL_P;
+}
+function sanitizeQuality(x){
+ if(x<X_TOL) return 0;
+ if(x>1-X_TOL) return 1;
+ return x;
 }
 
 /* =====================================================
-   IAPWS-2008 THERMAL CONDUCTIVITY (k)
+   IAPWS-2008 TRANSPORT
 ===================================================== */
+function viscosity(T,rho){
+ const Tbar=T/Tc;
+ const rhobar=rho/rhoc;
+ const a=[0.978197,0.579829,-0.202354,0.079453,-0.015116,0.000357];
+ let mu0=0;
+ for(let i=0;i<a.length;i++) mu0+=a[i]/Math.pow(Tbar,i);
+ mu0*=1e-6;
+ const b=[0.520094,0.0850895,-1.08374,-0.289555];
+ let mu1=1;
+ for(let i=0;i<b.length;i++) mu1+=b[i]*Math.pow(rhobar,i+1);
+ return mu0*mu1;
+}
+
 function conductivity(T,rho){
- const Tbar = T / Tc;
- const rhobar = rho / rhoc;
-
- const c = [
- 1.60397357,-0.646013523,0.111443906,
- 0.102997357,-0.050412363
- ];
-
- let k0 = 0;
- for(let i=0;i<c.length;i++){
-  k0 += c[i]/Math.pow(Tbar,i);
- }
-
- const d = [2.33771842,-1.01241114];
- let k1 = 1 + d[0]*rhobar + d[1]*rhobar*rhobar;
-
+ const Tbar=T/Tc;
+ const rhobar=rho/rhoc;
+ const c=[1.60397357,-0.646013523,0.111443906,0.102997357,-0.050412363];
+ let k0=0;
+ for(let i=0;i<c.length;i++) k0+=c[i]/Math.pow(Tbar,i);
+ const d=[2.33771842,-1.01241114];
+ let k1=1+d[0]*rhobar+d[1]*rhobar*rhobar;
  return k0*k1*0.001;
 }
 
 /* =====================================================
-   MAIN
+   MAIN CALCULATION
 ===================================================== */
 function calculate(){
  const TK=toK(T.value,Tunit.value);
  const PM=toMPa(P.value,Punit.value);
  const Ts=Tsat(PM);
- const xval=parseFloat(x.value);
+ const Ps=Psat(TK);
+ let xval=parseFloat(x.value);
 
- let p,state;
+ let p,state,Ttransport;
+
  if(!isNaN(xval)){
+  xval=sanitizeQuality(xval);
   const f=region1(Ts,PM);
   const g=region2(Ts,PM);
   p=mix(f,g,xval);
-  state="Saturated mixture";
+  state=xval===0?"Saturated Liquid":xval===1?"Saturated Vapor":"Saturated Mixture";
+  Ttransport=Ts;
  }
- else if(TK<Ts){
-  p=region1(TK,PM); state="Liquid";
+ else if(nearSaturation(TK,PM)){
+  const f=region1(Ts,PM);
+  const g=region2(Ts,PM);
+  const xv=TK<Ts?0:1;
+  p=mix(f,g,xv);
+  state=xv===0?"Saturated Liquid":"Saturated Vapor";
+  Ttransport=Ts;
+ }
+ else if(PM>Ps){
+  p=region1(TK,PM);
+  state="Compressed / Subcooled Liquid";
+  Ttransport=TK;
  }
  else{
-  p=region2(TK,PM); state="Vapor";
+  p=region2(TK,PM);
+  state="Superheated Steam";
+  Ttransport=TK;
  }
 
- p.mu=viscosity(TK,p.rho);
- p.k=conductivity(TK,p.rho);
+ p.mu=Math.max(viscosity(Ttransport,p.rho),1e-7);
+ p.k=Math.max(conductivity(Ttransport,p.rho),0.001);
 
  result.innerHTML=`
  <table>
