@@ -5,28 +5,41 @@
 <head>
   <meta charset="UTF-8">
   <title>Water & Steam Property Calculator</title>
+  <link rel="canonical" href="https://steam.easytechcalculators.com">
 </head>
 
 <body>
 
-  <!-- your HTML inputs here -->
   <input id="temp" type="number" placeholder="Temperature (°C)">
   <input id="press" type="number" placeholder="Pressure (MPa)">
-  <button onclick="calculate()">Calculate</button>
+  <button type="button" onclick="calculate()">Calculate</button>
 
   <pre id="results"></pre>
 
-
   <script>
+    const API = "https://YOUR-BACKEND.onrender.com/api/water"; // ← REQUIRED
+
     async function calculate() {
       const T = document.getElementById("temp").value;
       const P = document.getElementById("press").value;
 
-      const r = await fetch(`/api/water?T=${T}&P=${P}`);
-      const data = await r.json();
+      if (!T || !P) {
+        alert("Please enter temperature and pressure");
+        return;
+      }
 
-      document.getElementById("results").textContent =
-        JSON.stringify(data, null, 2);
+      try {
+        const r = await fetch(`${API}?T=${T}&P=${P}`);
+        if (!r.ok) throw new Error("API error");
+
+        const data = await r.json();
+        document.getElementById("results").textContent =
+          JSON.stringify(data, null, 2);
+      } catch (e) {
+        document.getElementById("results").textContent =
+          "Error contacting calculation server";
+        console.error(e);
+      }
     }
   </script>
 
