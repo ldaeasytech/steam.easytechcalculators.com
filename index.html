@@ -3,189 +3,59 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Water & Steam Property Calculator</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<style>
-body{font-family:Arial;background:#f4f6f8;margin:0}
-header{background:#0b5ed7;color:#fff;padding:28px;text-align:center}
-.container{max-width:1100px;margin:25px auto;background:#fff;padding:25px;border-radius:10px}
-.row{display:flex;gap:15px;flex-wrap:wrap}
-.col{flex:1;min-width:220px}
-label{font-weight:bold}
-input,select{width:100%;padding:8px;margin-top:5px}
-button{background:#198754;color:#fff;border:none;padding:12px;font-size:16px;border-radius:6px;cursor:pointer}
-button:hover{background:#157347}
-table{width:100%;border-collapse:collapse;margin-top:20px}
-td{padding:10px;border-bottom:1px solid #ddd}
-.state{font-weight:bold;color:#0b5ed7}
-.footer{text-align:center;color:#666;font-size:13px;margin-top:15px}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Water & Steam Property Calculator</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    label { display: block; margin-top: 10px; }
+    input { width: 100%; padding: 8px; margin-top: 4px; }
+    button { margin-top: 15px; padding: 10px 20px; font-size: 16px; }
+    pre { background: #f4f4f4; padding: 10px; }
+  </style>
 </head>
-
 <body>
-<header>
-<h1>Water & Steam Property Calculator</h1>
-<p>IAPWS-IF97 + Transport Properties</p>
-</header>
+  <h1>Water & Steam Property Calculator</h1>
+  <p>Based on IAPWS-IF97 with transport properties</p>
 
-<div class="container">
-<div class="row">
-<div class="col">
-<label>Temperature</label>
-<input id="T" value="150">
-<select id="Tunit"><option>C</option><option>K</option></select>
-</div>
+  <label>
+    Temperature
+    <input type="number" id="temp" placeholder="°C" />
+  </label>
 
-<div class="col">
-<label>Pressure</label>
-<input id="P" value="1.01325">
-<select id="Punit"><option>bar</option><option>MPa</option></select>
-</div>
+  <label>
+    Pressure
+    <input type="number" id="press" placeholder="MPa" />
+  </label>
 
-<div class="col">
-<label>Quality x (optional)</label>
-<input id="x" placeholder="0–1">
-</div>
+  <button onclick="calculate()">Calculate</button>
 
-<div class="col">
-<label>&nbsp;</label>
-<button type="button" onclick="calculate()">Calculate</button>
-</div>
-</div>
+  <h2>Results</h2>
+  <pre id="results">Enter values and click "Calculate".</pre>
 
-<table>
-<tr><td class="state">State</td><td id="state"></td></tr>
-<tr><td>Density</td><td id="rho"></td></tr>
-<tr><td>Specific Volume</td><td id="v"></td></tr>
-<tr><td>Enthalpy</td><td id="h"></td></tr>
-<tr><td>Entropy</td><td id="s"></td></tr>
-<tr><td>Viscosity</td><td id="mu"></td></tr>
-<tr><td>Thermal Conductivity</td><td id="k"></td></tr>
-</table>
+  <script>
+    async function calculate() {
+      const T = document.getElementById("temp").value;
+      const P = document.getElementById("press").value;
+      const out = document.getElementById("results");
 
-<div class="footer">
-Validated against Perry’s Chemical Engineers’ Handbook
-</div>
-</div>
+      if (!T || !P) {
+        out.textContent = "Please enter both T and P.";
+        return;
+      }
 
-<script>
-/* ============================================================
-   PROFESSIONAL ENGINEERING IAPWS-IF97 (Corrected)
-   Single-file implementation
-   ============================================================ */
+      try {
+        const resp = await fetch(`/api/water?T=${T}&P=${P}`);
+        const data = await resp.json();
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = "Error contacting backend API.";
+      }
+    }
+  </script>
 
-const IF97 = (() => {
-
-const R = 0.461526; // kJ/kg/K
-
-/* ---------- Unit Conversion ---------- */
-const toK = (T,u)=>u==="C"?T+273.15:T;
-const toMPa = (P,u)=>u==="bar"?P*0.1:P;
-
-/* ---------- Region 4: Saturation ---------- */
-function Psat(T){
-  const n=[
-    0.11670521452767e4,-0.72421316703206e6,
-    -0.17073846940092e2,0.12020824702470e5,
-    -0.32325550322333e7,0.14915108613530e2,
-    -0.48232657361591e4,0.40511340542057e6,
-    -0.23855557567849,0.65017534844798e3
-  ];
-  const θ=T+n[8]/(T-n[9]);
-  const A=θ*θ+n[0]*θ+n[1];
-  const B=n[2]*θ*θ+n[3]*θ+n[4];
-  const C=n[5]*θ*θ+n[6]*θ+n[7];
-  return Math.pow(2*C/(-B+Math.sqrt(B*B-4*A*C)),4);
-}
-
-function Tsat(P){
-  let T=373.15;
-  for(let i=0;i<40;i++){
-    T-=(Psat(T)-P)/0.01;
-  }
-  return T;
-}
-
-/* ---------- Region 1: Liquid (engineering accurate) ---------- */
-function region1(T,P){
-  const Tc=T-273.15;
-  const rho=
-    1000*
-    (1-((Tc+288.9414)/(508929.2*(Tc+68.12963)))*
-    Math.pow(Tc-3.9863,2));
-  return{
-    rho:rho,
-    h:4.186*Tc,
-    s:1.307+0.004*Tc
-  };
-}
-
-/* ---------- Region 2: Superheated Steam (FIXED) ---------- */
-function region2(T,P){
-  // Real-gas correction (engineering-grade)
-  const Z = 0.98; // compressibility factor near 1 atm
-  const v = Z * R*T/(P*1000);
-  return{
-    rho:1/v,
-    h:2676 + 2.08*(T-373.15),
-    s:7.354 + 0.0047*(T-373.15)
-  };
-}
-
-/* ---------- Region 3: Dense Fluid ---------- */
-function region3(T,P){
-  const rho=950+25*(P-22)-0.4*(T-647);
-  return{
-    rho:rho,
-    h:2100+2.3*(T-647),
-    s:4.4+0.0023*(T-647)
-  };
-}
-
-/* ---------- Region 5 ---------- */
-function region5(T,P){
-  const v=R*T/(P*1000);
-  return{
-    rho:1/v,
-    h:3500+2.5*(T-1073),
-    s:8.8+0.003*(T-1073)
-  };
-}
-
-/* ---------- Region Selector ---------- */
-function solve(T,P){
-  const Ts=Tsat(P);
-  if(T<=623.15){
-    return P>Psat(T)?region1(T,P):region2(T,P);
-  }
-  if(T<=863.15){
-    return P>16.5292?region3(T,P):region2(T,P);
-  }
-  if(T<=1073.15) return region2(T,P);
-  return region5(T,P);
-}
-
-return{solve,toK,toMPa};
-
-})();
-
-/* ---------- UI ---------- */
-function calculate(){
-  const TK=IF97.toK(+T.value,Tunit.value);
-  const PM=IF97.toMPa(+P.value,Punit.value);
-  const p=IF97.solve(TK,PM);
-
-  state.textContent="IAPWS-IF97 (Professional)";
-  rho.textContent=p.rho.toFixed(3)+" kg/m³";
-  v.textContent=(1/p.rho).toExponential(6)+" m³/kg";
-  h.textContent=p.h.toFixed(1)+" kJ/kg";
-  s.textContent=p.s.toFixed(4)+" kJ/kg·K";
-  mu.textContent=(p.rho>100?0.00089:1.3e-5)+" Pa·s";
-  k.textContent=(p.rho>100?0.6:0.025)+" W/m·K";
-}
-</script>
+</body>
+</html>
 
 
 </body>
